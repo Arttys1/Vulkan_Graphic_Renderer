@@ -120,7 +120,7 @@ unsafe fn update_secondary_command_buffer(
     let command_buffer = device.allocate_command_buffers(&allocate_info)?[0];
 
     let model = data.at_model(model_index);
-    let descriptor = &model.texture().descriptor_sets()[image_index];
+    let descriptor = &model.descriptor().descriptor_sets()[image_index];
     let model_buffer = model.buffer();
 
     let y = (((model_index % 2) as f32) * 2.5) - 1.25;

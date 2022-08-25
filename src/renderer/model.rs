@@ -11,6 +11,8 @@ use {
         vertexbuffers::VertexBuffer,
         vertex::Vertex, 
         renderer::Renderer,
+        uniformbuffers::UniformBuffer,
+        descriptor::Descriptor,
     },
     nalgebra_glm as glm,
 };
@@ -19,6 +21,8 @@ use {
 pub struct Model {
     texture: Texture,
     buffer: VertexBuffer,
+    uniform_buffer: UniformBuffer,
+    descriptor: Descriptor,
 }
 
 impl Model {
@@ -29,25 +33,58 @@ impl Model {
         
         let buffer = VertexBuffer::allocate_(renderer, vertices, indices)?;
         let texture = Texture::new(renderer, texture_url)?;
+        let uniform_buffer = UniformBuffer::new(renderer)?;
+        let data = renderer.get_appdata();
+        let device = renderer.get_device();
+        let descriptor = Descriptor::new(device, 
+            data.swapchain_images(),
+            data.descriptor_set_layout(), 
+            &uniform_buffer, 
+            &texture)?;
         Ok(Model {
             texture,
             buffer,
+            uniform_buffer,
+            descriptor,
         })
     }
 
-    pub fn construct(buffer: VertexBuffer, texture: Texture) -> Result<Self> {
-        if !(buffer.is_allocated() && texture.is_allocated()) {
-            return Err(anyhow!("buffer and texture must be allocated before"));
+    pub fn construct(buffer: VertexBuffer, texture: Texture, uniform_buffer: UniformBuffer, descriptor: Descriptor)
+-> Result<Self> {
+        if !(buffer.is_allocated() && texture.is_allocated() && uniform_buffer.is_allocated() && descriptor.is_allocated()) {
+            return Err(anyhow!("vertex_buffer, texture and uniform_buffer must be allocated before"));
         }
         Ok(Model {
             texture,
             buffer,
+            uniform_buffer,
+            descriptor,
         })
     }
 
     pub fn clean(&mut self) {
         self.texture.clean();
         self.buffer.clean();
+        self.uniform_buffer.clean();
+        self.descriptor.clean();
+    }
+
+    pub fn reload_swapchain(&mut self,
+        instance: &Instance, 
+        physical_device: vk::PhysicalDevice,
+        swapchain_images: &Vec<vk::Image>,
+        descriptor_set_layout: vk::DescriptorSetLayout) -> Result<()> 
+    {
+        self.uniform_buffer.reload_swapchain_models(instance, physical_device, swapchain_images)?;
+        self.descriptor.reload_swapchain(swapchain_images, descriptor_set_layout, &self.uniform_buffer, &self.texture)?;
+        Ok(())
+    }
+
+    pub fn update(&mut self, device: &Device, swapchain_extent: vk::Extent2D, image_index: usize) -> Result<()> {
+        unsafe {
+            self.uniform_buffer.update_uniform_buffer(device, swapchain_extent, image_index)?;
+            Ok(())
+        }
     }
 
     pub fn texture(&self) -> &Texture {
@@ -58,16 +95,13 @@ impl Model {
         &self.buffer
     }
 
-    pub fn reload_swapchain(&mut self,
-        swapchain_images: &Vec<vk::Image>,
-        descriptor_set_layout: vk::DescriptorSetLayout,
-        uniform_buffers: &Vec<vk::Buffer>,) -> Result<()> 
-    {
-        let a = &mut self.texture; 
-        a.reload_swapchain(swapchain_images, descriptor_set_layout, uniform_buffers)?;
-        Ok(())
+    pub fn descriptor(&self) -> &Descriptor {
+        &self.descriptor
     }
 
+    pub fn uniform_buffer_mut(&mut self) -> &UniformBuffer {
+        &self.uniform_buffer
+    }
 }
 
 impl Drop for Model {

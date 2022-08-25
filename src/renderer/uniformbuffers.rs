@@ -8,12 +8,12 @@ use {
     anyhow::Result,
     nalgebra_glm as glm,
     super::{
-        appdata::AppData, 
         buffers_tools::create_buffer,
         renderer::Renderer,
     },
 };
 
+#[derive(Debug, Clone)]
 pub struct UniformBuffer {
     device: Arc<Device>,
     uniform_buffers: Vec<vk::Buffer>,
@@ -73,7 +73,7 @@ impl UniformBuffer {
         Ok(())
     }
 
-    pub unsafe fn update_uniform_buffer(&mut self, device: &Device, data: &AppData, image_index: usize) -> Result<()> {
+    pub unsafe fn update_uniform_buffer(&mut self, device: &Device, swapchain_extent: vk::Extent2D, image_index: usize) -> Result<()> {
         let view = glm::look_at(
             &glm::vec3(6.0, 0.0, 2.0),
             &glm::vec3(0.0, 0.0, 0.0),
@@ -81,7 +81,7 @@ impl UniformBuffer {
         );
     
         let mut proj = glm::perspective_rh_zo(
-            data.swapchain_extent().width as f32 / data.swapchain_extent().height as f32,
+            swapchain_extent.width as f32 / swapchain_extent.height as f32,
             glm::radians(&glm::vec1(45.0))[0],
             0.1,
             10.0,
@@ -102,6 +102,14 @@ impl UniformBuffer {
         device.unmap_memory(self.uniform_buffers_memory[image_index]);    
     
         Ok(())
+    }
+
+    pub(crate) fn is_allocated(&self) -> bool {
+        self.is_allocated
+    }
+
+    pub fn uniform_buffers(&self) -> &Vec<vk::Buffer> {
+       &self.uniform_buffers 
     }
 }
 
@@ -139,35 +147,4 @@ pub unsafe fn create_uniform_buffers(
     }
 
     Ok((uniform_buffers, uniform_buffers_memory))
-}
-
-pub unsafe fn update_uniform_buffer(device: &Device, data: &AppData, image_index: usize) -> Result<()> {
-    let view = glm::look_at(
-        &glm::vec3(6.0, 0.0, 2.0),
-        &glm::vec3(0.0, 0.0, 0.0),
-        &glm::vec3(0.0, 0.0, 1.0),
-    );
-
-    let mut proj = glm::perspective_rh_zo(
-        data.swapchain_extent().width as f32 / data.swapchain_extent().height as f32,
-        glm::radians(&glm::vec1(45.0))[0],
-        0.1,
-        10.0,
-    );        
-    proj[(1, 1)] *= -1.0;
-    
-    let ubo = UniformBufferObject::construct(view, proj);
-
-    let memory = device.map_memory(
-        data.uniform_buffers_memory()[image_index],
-        0,
-        size_of::<UniformBufferObject>() as u64,
-        vk::MemoryMapFlags::empty(),
-    )?;
-    
-    memcpy(&ubo, memory.cast(), 1);
-    
-    device.unmap_memory(data.uniform_buffers_memory()[image_index]);    
-
-    Ok(())
 }

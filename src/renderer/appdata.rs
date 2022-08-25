@@ -16,7 +16,6 @@ use {
         image::create_color_objects, 
         depthbuffers::create_depth_objects, 
         framebuffers::create_framebuffers, 
-        uniformbuffers::create_uniform_buffers, 
         sync::create_sync_objects,
         model::Model,
     },
@@ -60,10 +59,6 @@ pub struct AppData {
     render_finished_semaphores: Vec<vk::Semaphore>,
     in_flight_fences: Vec<vk::Fence>,
     images_in_flight: Vec<vk::Fence>,
-
-//uniform buffer
-    uniform_buffers: Vec<vk::Buffer>,
-    uniform_buffers_memory: Vec<vk::DeviceMemory>,
 
 //depth buffer
     depth_image: vk::Image,
@@ -123,10 +118,6 @@ impl AppData {
                 swapchain_extent, render_pass, 
                 depth_image_view, color_image_view)?;
 
-            let (uniform_buffers, 
-                uniform_buffers_memory,
-            ) = create_uniform_buffers(&instance, &device, physical_device, &swapchain_images)?;
-
             let command_buffers = vec![vk::CommandBuffer::null(); framebuffers.len()];
             
             let (in_flight_fences,
@@ -161,8 +152,6 @@ impl AppData {
                 render_finished_semaphores,
                 in_flight_fences,
                 images_in_flight,
-                uniform_buffers,
-                uniform_buffers_memory,
                 depth_image,
                 depth_image_memory,
                 depth_image_view,
@@ -227,12 +216,6 @@ impl AppData {
         self.device.destroy_image_view(self.depth_image_view, None);
         self.device.free_memory(self.depth_image_memory, None);
         self.device.destroy_image(self.depth_image, None);
-        
-        //uniform buffer
-        self.uniform_buffers.iter()
-            .for_each(|b| self.device.destroy_buffer(*b, None));
-        self.uniform_buffers_memory.iter()
-            .for_each(|m| self.device.free_memory(*m, None));
 
         //framebuffers
         self.framebuffers.iter()
@@ -286,10 +269,6 @@ impl AppData {
             swapchain_extent, render_pass, 
             depth_image_view, color_image_view)?;
 
-        let (uniform_buffers, 
-            uniform_buffers_memory,
-        ) = create_uniform_buffers(&instance, &device, *physical_device, &swapchain_images)?;
-
         self.swapchain = swapchain;
         self.swapchain_format = swapchain_format;
         self.swapchain_extent = swapchain_extent;
@@ -299,8 +278,6 @@ impl AppData {
         self.render_pass = render_pass;
         self.pipeline_layout = pipeline_layout;
         self.framebuffers = framebuffers;
-        self.uniform_buffers = uniform_buffers;
-        self.uniform_buffers_memory = uniform_buffers_memory;
         self.color_image = color_image;
         self.color_image_memory = color_image_memory;
         self.color_image_view = color_image_view;
@@ -311,36 +288,30 @@ impl AppData {
 
         for i in 0..self.models.len() {
             let model = &mut self.models[i];
-            model.reload_swapchain(&self.swapchain_images, self.descriptor_set_layout, &self.uniform_buffers)?;
+            model.reload_swapchain(
+                &self.instance,
+                self.physical_device,
+                &self.swapchain_images, 
+                self.descriptor_set_layout)?;
         }
 
         Ok(())
     }
 
-    pub fn push_model(&mut self, model: Model) {
-        self.models.push(model);
-    }    
-
-    pub fn models(&self) -> &[Model] {
-        self.models.as_ref()
+    pub fn push_model(&mut self, model: Model) { self.models.push(model); }
+    pub fn models(&self) -> &[Model] { self.models.as_ref() }
+    pub fn at_model(&self, index: usize) -> &Model { &self.models[index] }
+    pub fn update_models(&mut self, image_index: usize) -> Result<()> {
+        for i in 0..self.models.len() {
+            self.models[i].update(&self.device, self.swapchain_extent, image_index)?;
+        }
+        Ok(())
     }
 
-    pub fn at_model(&self, index: usize) -> &Model {
-        &self.models[index]
-    }
 
-    pub fn device(&self) -> Arc<Device> {
-        self.device.clone()
-    }
-
-    pub fn instance(&self) -> &Instance {
-        &self.instance
-    }
-
-    pub fn swapchain_extent(&self) -> vk::Extent2D {
-        self.swapchain_extent
-    }
-
+    pub fn device(&self) -> Arc<Device> { self.device.clone() }
+    pub fn instance(&self) -> &Instance { &self.instance }
+    pub fn swapchain_extent(&self) -> vk::Extent2D { self.swapchain_extent }
     pub fn render_pass(&self) -> vk::RenderPass {
         self.render_pass
     }
@@ -405,16 +376,8 @@ impl AppData {
         &self.swapchain_images
     }
 
-    pub fn uniform_buffers(&self) -> &Vec<vk::Buffer> {
-        &self.uniform_buffers
-    }
-
     pub fn descriptor_set_layout(&self) -> vk::DescriptorSetLayout {
         self.descriptor_set_layout
-    }
-
-    pub fn uniform_buffers_memory(&self) -> &[vk::DeviceMemory] {
-        self.uniform_buffers_memory.as_ref()
     }
 
     pub fn images_in_flight_mut(&mut self) -> &mut Vec<vk::Fence> {

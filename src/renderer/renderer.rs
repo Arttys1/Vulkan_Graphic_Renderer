@@ -13,7 +13,6 @@ use {
         appdata::*,
         commandbuffers::*, 
         model::Model,
-        uniformbuffers::*,
     }
 };
 pub const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -76,7 +75,7 @@ impl Renderer {
             self.data.images_in_flight_mut()[image_index] = in_flight_fence;
 
             update_command_buffer(&self.device, &mut self.data, image_index, &self.start)?;
-            update_uniform_buffer(&self.device, &self.data, image_index)?;
+            self.data.update_models(image_index)?;
 
             let wait_semaphores = &[self.data.image_available_semaphores()[self.frame]];
             let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];

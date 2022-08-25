@@ -1,11 +1,100 @@
 use {
-    std::mem::size_of,
+    std::{
+        mem::size_of,
+        sync::Arc,
+    },
     vulkanalia::prelude::v1_0::*,
     anyhow::Result,
     super::{
-        uniformbuffers::UniformBufferObject,
-    }
+        uniformbuffers::{
+            UniformBuffer, 
+            UniformBufferObject
+        },
+         texture::Texture,
+    },
 };
+
+#[derive(Debug, Clone)]
+pub struct Descriptor {    
+    device : Arc<Device>,
+    descriptor_pool: vk::DescriptorPool,
+    descriptor_sets: Vec<vk::DescriptorSet>,
+    is_allocated: bool,
+}
+
+impl Descriptor {
+    pub fn new(
+        device: Arc<Device>,
+        swapchain_images: &Vec<vk::Image>, 
+        descriptor_set_layout: vk::DescriptorSetLayout, 
+        uniform_buffers: &UniformBuffer,
+        texture: &Texture,) -> Result<Self> 
+    {
+        unsafe {
+        let descriptor_pool = create_descriptor_pool(&device, swapchain_images)?;
+        let descriptor_sets = create_descriptor_sets(
+            &device,
+            swapchain_images,
+            descriptor_set_layout,
+            uniform_buffers.uniform_buffers(),
+            descriptor_pool,
+            texture.texture_image_view(),
+            texture.texture_sampler())?;
+
+            Ok(Descriptor{
+                device,
+                descriptor_pool,
+                descriptor_sets,
+                is_allocated: true,
+            })
+        }
+    }
+
+    pub fn reload_swapchain(&mut self,
+        swapchain_images: &Vec<vk::Image>,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+        uniform_buffer: &UniformBuffer,
+        texture: &Texture,
+    ) -> Result<()> {
+        unsafe {
+            self.device.destroy_descriptor_pool(self.descriptor_pool, None);
+            self.descriptor_pool = create_descriptor_pool(&self.device, swapchain_images)?;
+            self.descriptor_sets = create_descriptor_sets(
+                &self.device,
+                swapchain_images,
+                descriptor_set_layout,
+                uniform_buffer.uniform_buffers(),
+                self.descriptor_pool,
+                texture.texture_image_view(),
+                texture.texture_sampler())?;
+            Ok(())
+        }
+    }
+
+
+    pub fn clean(&mut self) {
+        if self.is_allocated {
+            unsafe {
+                self.device.destroy_descriptor_pool(self.descriptor_pool, None);
+                self.is_allocated = false;
+            }
+        }
+    }
+
+    pub(crate) fn is_allocated(&self) -> bool {
+        self.is_allocated
+    }
+
+    pub fn descriptor_sets(&self) -> &[vk::DescriptorSet] {
+        self.descriptor_sets.as_ref()
+    }
+}
+
+impl Drop for Descriptor {
+    fn drop(&mut self) {
+        self.clean();
+    }
+}
 
 //================================================
 // descriptor set layout
@@ -36,7 +125,7 @@ pub unsafe fn create_descriptor_set_layout(device: &Device) -> Result<vk::Descri
 // descriptor pool
 //================================================
 
-pub unsafe fn load_descriptor_pool(device: &Device, swapchain_images: &Vec<vk::Image>) -> Result<vk::DescriptorPool> {
+pub unsafe fn create_descriptor_pool(device: &Device, swapchain_images: &Vec<vk::Image>) -> Result<vk::DescriptorPool> {
     let swapchain_len = swapchain_images.len() as u32;
     let ubo_size = vk::DescriptorPoolSize::builder()
         .type_(vk::DescriptorType::UNIFORM_BUFFER)
@@ -59,7 +148,7 @@ pub unsafe fn load_descriptor_pool(device: &Device, swapchain_images: &Vec<vk::I
 // descriptor sets
 //================================================
 
-pub unsafe fn load_descriptor_sets(
+pub unsafe fn create_descriptor_sets(
         device: &Device, 
         swapchain_images: &Vec<vk::Image>,
         descriptor_set_layout: vk::DescriptorSetLayout,
