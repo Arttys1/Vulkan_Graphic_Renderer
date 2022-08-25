@@ -1,5 +1,4 @@
 use crate::renderer::{
-    appdata::AppData,
     vertex::Vertex, 
     depthbuffers::get_depth_format,
 };
@@ -11,7 +10,13 @@ use anyhow::{Result, anyhow};
 // Pipeline
 //================================================
 
-pub unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> Result<()> {
+pub unsafe fn create_pipeline(
+    device: &Device, 
+    swapchain_extent: vk::Extent2D,
+    msaa_samples: vk::SampleCountFlags,
+    descriptor_set_layout: vk::DescriptorSetLayout,
+    render_pass: vk::RenderPass)
+-> Result<(vk::Pipeline, vk::PipelineLayout)> {
     let vert = include_bytes!("../../shaders/vert.spv");
     let frag = include_bytes!("../../shaders/frag.spv");
     
@@ -44,14 +49,14 @@ pub unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> Result<()>
     let viewport = vk::Viewport::builder()
         .x(0.0)
         .y(0.0)
-        .width(data.swapchain_extent.width as f32)
-        .height(data.swapchain_extent.height as f32)
+        .width(swapchain_extent.width as f32)
+        .height(swapchain_extent.height as f32)
         .min_depth(0.0)
         .max_depth(1.0);
 
     let scissor = vk::Rect2D::builder()
         .offset(vk::Offset2D { x: 0, y: 0 })
-        .extent(data.swapchain_extent);
+        .extent(swapchain_extent);
 
     let viewports = &[viewport];
     let scissors = &[scissor];
@@ -74,7 +79,7 @@ pub unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> Result<()>
         .sample_shading_enable(true)
         // Minimum fraction for sample shading; closer to one is smoother.
         .min_sample_shading(0.2)
-        .rasterization_samples(data.msaa_samples);
+        .rasterization_samples(msaa_samples);
 
     // Depth Stencil State
     let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
@@ -103,13 +108,13 @@ pub unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> Result<()>
         .size(64 /* 16 × 4 byte floats */);
 
     // Layout
-    let set_layouts = &[data.descriptor_set_layout];
+    let set_layouts = &[descriptor_set_layout];
     let push_constant_ranges = &[vert_push_constant_range];
     let layout_info = vk::PipelineLayoutCreateInfo::builder()
         .set_layouts(set_layouts)
         .push_constant_ranges(push_constant_ranges);
 
-    data.pipeline_layout = device.create_pipeline_layout(&layout_info, None)?;
+    let pipeline_layout = device.create_pipeline_layout(&layout_info, None)?;
 
     // Create
     let stages = &[vert_stage, frag_stage];
@@ -122,11 +127,11 @@ pub unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> Result<()>
         .multisample_state(&multisample_state)
         .depth_stencil_state(&depth_stencil_state)
         .color_blend_state(&color_blend_state)
-        .layout(data.pipeline_layout)
-        .render_pass(data.render_pass)
+        .layout(pipeline_layout)
+        .render_pass(render_pass)
         .subpass(0);
 
-    data.pipeline = device
+    let pipeline = device
         .create_graphics_pipelines(vk::PipelineCache::null(), &[info], None)?
         .0;
 
@@ -134,7 +139,7 @@ pub unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> Result<()>
     device.destroy_shader_module(vert_shader_module, None);
     device.destroy_shader_module(frag_shader_module, None);
 
-    Ok(())
+    Ok((pipeline, pipeline_layout))
 }
 
 unsafe fn create_shader_module(device: &Device, bytecode: &[u8]) -> Result<vk::ShaderModule> {
@@ -155,11 +160,17 @@ unsafe fn create_shader_module(device: &Device, bytecode: &[u8]) -> Result<vk::S
 // Render_pass
 //================================================
 
-pub unsafe fn create_render_pass(instance: &Instance, device: &Device, data: &mut AppData) -> Result<()> {
+pub unsafe fn create_render_pass(
+    instance: &Instance, 
+    device: &Device, 
+    physical_device: vk::PhysicalDevice,
+    swapchain_format: vk::Format,
+    msaa_samples: vk::SampleCountFlags
+) -> Result<vk::RenderPass> {
     // Attachments
     let color_attachment = vk::AttachmentDescription::builder()
-        .format(data.swapchain_format)
-        .samples(data.msaa_samples)
+        .format(swapchain_format)
+        .samples(msaa_samples)
         .load_op(vk::AttachmentLoadOp::CLEAR)
         .store_op(vk::AttachmentStoreOp::STORE)
         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
@@ -168,8 +179,8 @@ pub unsafe fn create_render_pass(instance: &Instance, device: &Device, data: &mu
         .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
 
     let depth_stencil_attachment = vk::AttachmentDescription::builder()
-        .format(get_depth_format(instance, data)?)
-        .samples(data.msaa_samples)
+        .format(get_depth_format(instance, physical_device)?)
+        .samples(msaa_samples)
         .load_op(vk::AttachmentLoadOp::CLEAR)
         .store_op(vk::AttachmentStoreOp::DONT_CARE)
         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
@@ -178,7 +189,7 @@ pub unsafe fn create_render_pass(instance: &Instance, device: &Device, data: &mu
         .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
     let color_resolve_attachment = vk::AttachmentDescription::builder()
-        .format(data.swapchain_format)
+        .format(swapchain_format)
         .samples(vk::SampleCountFlags::_1)
         .load_op(vk::AttachmentLoadOp::DONT_CARE)
         .store_op(vk::AttachmentStoreOp::STORE)
@@ -230,7 +241,7 @@ pub unsafe fn create_render_pass(instance: &Instance, device: &Device, data: &mu
         .subpasses(subpasses)
         .dependencies(dependencies);
 
-    data.render_pass = device.create_render_pass(&info, None)?;
+   let render_pass = device.create_render_pass(&info, None)?;
 
-    Ok(())
+    Ok(render_pass)
 }

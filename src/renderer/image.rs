@@ -3,11 +3,10 @@ use std::{
     ptr::copy_nonoverlapping as memcpy,
 };
 use vulkanalia::{
-    prelude::v1_0::*
+    prelude::v1_0::*,
 };
 use anyhow::{Result, anyhow};
 use crate::renderer::{
-    appdata::AppData,
     buffers_tools::*,
 };
 
@@ -15,9 +14,16 @@ use crate::renderer::{
 // texture image
 //================================================
 
-pub unsafe fn create_texture_image(instance: &Instance, device: &Device, data: &mut AppData) -> Result<()> {
+pub unsafe fn load_texture_image(
+    instance: &Instance,
+    device: &Device, 
+    physical_device: vk::PhysicalDevice,
+    command_pool: vk::CommandPool,
+    graphics_queue: vk::Queue,
+    url: &str)
+ -> Result<(vk::Image, vk::DeviceMemory, u32)> {
     // Load
-    let image = File::open("resources/viking_room.png")?;
+    let image = File::open(url)?;
 
     let decoder = png::Decoder::new(image);
     let (info, mut reader) = decoder.read_info()?;
@@ -26,13 +32,13 @@ pub unsafe fn create_texture_image(instance: &Instance, device: &Device, data: &
     reader.next_frame(&mut pixels)?;
 
     let size = info.buffer_size() as u64;
-    data.mip_levels = (info.width.max(info.height) as f32).log2().floor() as u32 + 1;
+    let mip_levels = (info.width.max(info.height) as f32).log2().floor() as u32 + 1;
 
     // Create (staging)
     let (staging_buffer, staging_buffer_memory) = create_buffer(
         instance,
         device,
-        data,
+        physical_device,
         size,
         vk::BufferUsageFlags::TRANSFER_SRC,
         vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
@@ -49,10 +55,10 @@ pub unsafe fn create_texture_image(instance: &Instance, device: &Device, data: &
     let (texture_image, texture_image_memory) = create_image(
         instance,
         device,
-        data,
+        physical_device,
         info.width,
         info.height,
-        data.mip_levels,
+        mip_levels,
         vk::SampleCountFlags::_1,
         vk::Format::R8G8B8A8_SRGB,
         vk::ImageTiling::OPTIMAL,
@@ -60,25 +66,24 @@ pub unsafe fn create_texture_image(instance: &Instance, device: &Device, data: &
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
     )?;
 
-    data.texture_image = texture_image;
-    data.texture_image_memory = texture_image_memory;
-
     // Transition + Copy (image)
     transition_image_layout(
         device,
-        data,
-        data.texture_image,
+        command_pool, 
+        graphics_queue,
+        texture_image,
         vk::Format::R8G8B8A8_SRGB,
         vk::ImageLayout::UNDEFINED,
         vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-        data.mip_levels,
+        mip_levels,
     )?;
 
     copy_buffer_to_image(
         device,
-        data,
+        command_pool, 
+        graphics_queue,
         staging_buffer,
-        data.texture_image,
+        texture_image,
         info.width,
         info.height,
     )?;
@@ -91,15 +96,17 @@ pub unsafe fn create_texture_image(instance: &Instance, device: &Device, data: &
     generate_mipmaps(
         instance,
         device,
-        data,
-        data.texture_image,
+        physical_device,
+        command_pool, 
+        graphics_queue,
+        texture_image,
         vk::Format::R8G8B8A8_SRGB,
         info.width,
         info.height,
-        data.mip_levels,
+        mip_levels,
     )?;
 
-    Ok(())
+    Ok((texture_image, texture_image_memory, mip_levels))
 }
 
 
@@ -107,23 +114,21 @@ pub unsafe fn create_texture_image(instance: &Instance, device: &Device, data: &
 // texture image view
 //================================================
 
-pub unsafe fn create_texture_image_view(device: &Device, data: &mut AppData) -> Result<()> {
-    data.texture_image_view = create_image_view(
+pub unsafe fn load_texture_image_view(device: &Device, texture_image: vk::Image, mip_levels: u32) -> Result<vk::ImageView> {
+    Ok(create_image_view(
         device,
-        data.texture_image,
+        texture_image,
         vk::Format::R8G8B8A8_SRGB,
         vk::ImageAspectFlags::COLOR,
-        data.mip_levels,
-    )?;
-
-    Ok(())
+        mip_levels,
+    )?)
 }
 
 //================================================
 // texture sampler
 //================================================
 
-pub unsafe fn create_texture_sampler(device: &Device, data: &mut AppData) -> Result<()> {
+pub unsafe fn load_texture_sampler(device: &Device, mip_levels: u32) -> Result<vk::Sampler> {
     let info = vk::SamplerCreateInfo::builder()
         .mag_filter(vk::Filter::LINEAR)
         .min_filter(vk::Filter::LINEAR)
@@ -138,12 +143,11 @@ pub unsafe fn create_texture_sampler(device: &Device, data: &mut AppData) -> Res
         .compare_op(vk::CompareOp::ALWAYS)
         .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
         .min_lod(0.0)       // Optional.
-        .max_lod(data.mip_levels as f32)
+        .max_lod(mip_levels as f32)
         .mip_lod_bias(0.0); // Optional.
 
-    data.texture_sampler = device.create_sampler(&info, None)?;
-
-    Ok(())
+    let sampler = device.create_sampler(&info, None)?;
+    Ok(sampler)
 }
 
 //================================================
@@ -153,7 +157,9 @@ pub unsafe fn create_texture_sampler(device: &Device, data: &mut AppData) -> Res
 unsafe fn generate_mipmaps(
     instance: &Instance,
     device: &Device,
-    data: &AppData,
+    physical_device: vk::PhysicalDevice,
+    command_pool: vk::CommandPool,
+    graphics_queue: vk::Queue,
     image: vk::Image,
     format: vk::Format,
     width: u32,
@@ -162,7 +168,7 @@ unsafe fn generate_mipmaps(
 ) -> Result<()> {
     // Support
     if !instance
-        .get_physical_device_format_properties(data.physical_device, format)
+        .get_physical_device_format_properties(physical_device, format)
         .optimal_tiling_features
         .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR)
     {
@@ -170,7 +176,7 @@ unsafe fn generate_mipmaps(
     }
 
     // Mipmaps
-    let command_buffer = begin_single_time_commands(device, data)?;
+    let command_buffer = begin_single_time_commands(device, command_pool)?;
 
     let subresource = vk::ImageSubresourceRange::builder()
         .aspect_mask(vk::ImageAspectFlags::COLOR)
@@ -286,7 +292,7 @@ unsafe fn generate_mipmaps(
         &[barrier],
     );
 
-    end_single_time_commands(device, data, command_buffer)?;
+    end_single_time_commands(device, command_buffer, command_pool, graphics_queue)?;
 
     Ok(())
 }
@@ -321,7 +327,7 @@ pub unsafe fn create_image_view(
 pub unsafe fn create_image(
     instance: &Instance,
     device: &Device,
-    data: &AppData,
+    physical_device: vk::PhysicalDevice,
     width: u32,
     height: u32,
     mip_levels: u32,
@@ -355,7 +361,7 @@ pub unsafe fn create_image(
 
     let info = vk::MemoryAllocateInfo::builder()
         .allocation_size(requirements.size)
-        .memory_type_index(get_memory_type_index(instance, data, properties, requirements)?);
+        .memory_type_index(get_memory_type_index(instance, physical_device, properties, requirements)?);
 
     let image_memory = device.allocate_memory(&info, None)?;
 
@@ -366,13 +372,14 @@ pub unsafe fn create_image(
 
 unsafe fn copy_buffer_to_image(
     device: &Device,
-    data: &AppData,
+    command_pool: vk::CommandPool,
+    graphics_queue: vk::Queue,
     buffer: vk::Buffer,
     image: vk::Image,
     width: u32,
     height: u32,
 ) -> Result<()> {
-    let command_buffer = begin_single_time_commands(device, data)?;
+    let command_buffer = begin_single_time_commands(device, command_pool)?;
 
     let subresource = vk::ImageSubresourceLayers::builder()
         .aspect_mask(vk::ImageAspectFlags::COLOR)
@@ -400,14 +407,15 @@ unsafe fn copy_buffer_to_image(
         &[region],
     );
 
-    end_single_time_commands(device, data, command_buffer)?;
+    end_single_time_commands(device, command_buffer, command_pool, graphics_queue)?;
 
     Ok(())
 }
 
 unsafe fn transition_image_layout(
     device: &Device,
-    data: &AppData,
+    command_pool: vk::CommandPool,
+    graphics_queue: vk::Queue,
     image: vk::Image,
     _format: vk::Format,
     old_layout: vk::ImageLayout,
@@ -431,7 +439,7 @@ unsafe fn transition_image_layout(
         _ => return Err(anyhow!("Unsupported image layout transition!")),
     };
 
-    let command_buffer = begin_single_time_commands(device, data)?;
+    let command_buffer = begin_single_time_commands(device, command_pool)?;
 
     let subresource = vk::ImageSubresourceRange::builder()
         .aspect_mask(vk::ImageAspectFlags::COLOR)
@@ -460,7 +468,7 @@ unsafe fn transition_image_layout(
         &[barrier],
     );
 
-    end_single_time_commands(device, data, command_buffer)?;
+    end_single_time_commands(device, command_buffer, command_pool, graphics_queue)?;
 
     Ok(())
 }
@@ -472,33 +480,33 @@ unsafe fn transition_image_layout(
 pub unsafe fn create_color_objects(
     instance: &Instance,
     device: &Device,
-    data: &mut AppData,
-) -> Result<()> {
+    physical_device: vk::PhysicalDevice,
+    swapchain_extent: vk::Extent2D,
+    msaa_samples: vk::SampleCountFlags,
+    swapchain_format: vk::Format,
+) -> Result<(vk::Image, vk::DeviceMemory,vk::ImageView)> {
     let (color_image, color_image_memory) = create_image(
         instance,
         device,
-        data,
-        data.swapchain_extent.width,
-        data.swapchain_extent.height,
+        physical_device,
+        swapchain_extent.width,
+        swapchain_extent.height,
         1,
-        data.msaa_samples,
-        data.swapchain_format,
+        msaa_samples,
+        swapchain_format,
         vk::ImageTiling::OPTIMAL,
         vk::ImageUsageFlags::COLOR_ATTACHMENT
             | vk::ImageUsageFlags::TRANSIENT_ATTACHMENT,
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
     )?;
 
-    data.color_image = color_image;
-    data.color_image_memory = color_image_memory;
-
-    data.color_image_view = create_image_view(
+    let color_image_view = create_image_view(
         device,
-        data.color_image,
-        data.swapchain_format,
+        color_image,
+        swapchain_format,
         vk::ImageAspectFlags::COLOR,
         1,
     )?;
 
-    Ok(())
+    Ok((color_image, color_image_memory, color_image_view))
 }

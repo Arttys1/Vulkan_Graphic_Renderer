@@ -3,29 +3,32 @@ use vulkanalia::{
 };
 use anyhow::Result;
 
-use crate::renderer::appdata::AppData;
-
 
 //================================================
 // Framebuffers
 //================================================
 
-pub unsafe fn create_framebuffers(device: &Device, data: &mut AppData) -> Result<()> {
-    data.framebuffers = data
-        .swapchain_image_views
-        .iter()
+pub unsafe fn create_framebuffers(
+    device: &Device,
+    swapchain_image_views: &Vec<vk::ImageView>,
+    swapchain_extent: vk::Extent2D,
+    render_pass: vk::RenderPass,
+    depth_image_view: vk::ImageView,
+    color_image_view: vk::ImageView,) 
+-> Result<Vec<vk::Framebuffer>> {
+    let framebuffers = swapchain_image_views.iter()
         .map(|i| {
-            let attachments = &[data.color_image_view, data.depth_image_view, *i];
+            let attachments = &[color_image_view, depth_image_view, *i];
             let create_info = vk::FramebufferCreateInfo::builder()
-                .render_pass(data.render_pass)
+                .render_pass(render_pass)
                 .attachments(attachments)
-                .width(data.swapchain_extent.width)
-                .height(data.swapchain_extent.height)
+                .width(swapchain_extent.width)
+                .height(swapchain_extent.height)
                 .layers(1);
 
             device.create_framebuffer(&create_info, None)
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(())
+    Ok(framebuffers)
 }

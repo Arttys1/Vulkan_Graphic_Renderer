@@ -1,8 +1,11 @@
 pub mod renderer;
+pub mod texture;
+pub mod vertexbuffers;
+pub mod model;
+pub mod uniformbuffers;
+pub mod vertex;
 mod appdata;
 mod instance;
-mod vertex;
-mod vertexbuffers;
 mod descriptor;
 mod image;
 mod depthbuffers;

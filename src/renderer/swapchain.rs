@@ -8,7 +8,6 @@ use vulkanalia::{
 use anyhow::Result;
 use winit::window::Window;
 use crate::renderer::{
-    appdata::AppData,
     queue_family::*,
     image::create_image_view,
 };
@@ -21,11 +20,11 @@ pub struct SwapchainSupport {
 }
 
 impl SwapchainSupport {
-    pub unsafe fn get(instance: &Instance, data: &AppData, physical_device: vk::PhysicalDevice) -> Result<Self> {
+    pub unsafe fn get(instance: &Instance, surface: vk::SurfaceKHR, physical_device: vk::PhysicalDevice) -> Result<Self> {
         Ok(Self {
-            capabilities: instance.get_physical_device_surface_capabilities_khr(physical_device, data.surface)?,
-            formats: instance.get_physical_device_surface_formats_khr(physical_device, data.surface)?,
-            present_modes: instance.get_physical_device_surface_present_modes_khr(physical_device, data.surface)?,
+            capabilities: instance.get_physical_device_surface_capabilities_khr(physical_device, surface)?,
+            formats: instance.get_physical_device_surface_formats_khr(physical_device, surface)?,
+            present_modes: instance.get_physical_device_surface_present_modes_khr(physical_device, surface)?,
         })
     }
 }
@@ -34,17 +33,20 @@ impl SwapchainSupport {
 // Swapchain
 //================================================
 
-pub unsafe fn create_swapchain(window: &Window, instance: &Instance, device: &Device, data: &mut AppData) -> Result<()> {
+pub unsafe fn create_swapchain(
+    window: &Window, 
+    instance: &Instance,
+    device: &Device, 
+    surface: vk::SurfaceKHR, 
+    physical_device: vk::PhysicalDevice)
+-> Result<(vk::SwapchainKHR, vk::Format, vk::Extent2D, Vec<vk::Image>)> {
     // Image
-    let indices = QueueFamilyIndices::get(instance, data, data.physical_device)?;
-    let support = SwapchainSupport::get(instance, data, data.physical_device)?;
+    let indices = QueueFamilyIndices::get(instance, surface, physical_device)?;
+    let support = SwapchainSupport::get(instance, surface, physical_device)?;
 
     let surface_format = get_swapchain_surface_format(&support.formats);
     let present_mode = get_swapchain_present_mode(&support.present_modes);
     let extent = get_swapchain_extent(window, support.capabilities);
-
-    data.swapchain_format = surface_format.format;
-    data.swapchain_extent = extent;
 
     let mut image_count = support.capabilities.min_image_count + 1;
     if support.capabilities.max_image_count != 0 && image_count > support.capabilities.max_image_count {
@@ -63,7 +65,7 @@ pub unsafe fn create_swapchain(window: &Window, instance: &Instance, device: &De
     // Create
 
     let info = vk::SwapchainCreateInfoKHR::builder()
-        .surface(data.surface)
+        .surface(surface)
         .min_image_count(image_count)
         .image_format(surface_format.format)
         .image_color_space(surface_format.color_space)
@@ -78,26 +80,28 @@ pub unsafe fn create_swapchain(window: &Window, instance: &Instance, device: &De
         .clipped(true)
         .old_swapchain(vk::SwapchainKHR::null());
 
-    data.swapchain = device.create_swapchain_khr(&info, None)?;
+    let swapchain = device.create_swapchain_khr(&info, None)?;
 
     // Images
-    data.swapchain_images = device.get_swapchain_images_khr(data.swapchain)?;
+    let swapchain_images = device.get_swapchain_images_khr(swapchain)?;
 
-    Ok(())
+    Ok((swapchain, surface_format.format, extent, swapchain_images))
 }
 
 //================================================
 // Swapchain image views
 //================================================
 
-pub unsafe fn create_swapchain_image_views(device: &Device, data: &mut AppData) -> Result<()> {
-    data.swapchain_image_views = data
-        .swapchain_images
-        .iter()
-        .map(|i| create_image_view(device, *i, data.swapchain_format, vk::ImageAspectFlags::COLOR, 1))
+pub unsafe fn create_swapchain_image_views(
+    device: &Device, 
+    swapchain_images: &Vec<vk::Image>, 
+    swapchain_format: vk::Format) 
+-> Result<Vec<vk::ImageView>> {
+    let swapchain_image_views = swapchain_images.iter()
+        .map(|i| create_image_view(device, *i, swapchain_format, vk::ImageAspectFlags::COLOR, 1))
         .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(())
+    Ok(swapchain_image_views)
 }
 
 //================================================

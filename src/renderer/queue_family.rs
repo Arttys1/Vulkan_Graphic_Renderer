@@ -7,7 +7,7 @@ use vulkanalia::{
 use anyhow::{Result, anyhow};
 use thiserror::Error;
 use crate::renderer::{
-    appdata::{AppData, VALIDATION_ENABLED, VALIDATION_LAYER},
+    instance::{VALIDATION_ENABLED, VALIDATION_LAYER},
     swapchain::SwapchainSupport,
 };
 
@@ -24,7 +24,7 @@ pub struct QueueFamilyIndices {
 pub struct SuitabilityError(pub &'static str);
 
 impl QueueFamilyIndices {
-    pub unsafe fn get(instance: &Instance, data: &AppData, physical_device: vk::PhysicalDevice) -> Result<Self> {
+    pub unsafe fn get(instance: &Instance, surface: vk::SurfaceKHR, physical_device: vk::PhysicalDevice) -> Result<Self> {
         let properties = instance
             .get_physical_device_queue_family_properties(physical_device);
 
@@ -38,7 +38,7 @@ impl QueueFamilyIndices {
                 if instance.get_physical_device_surface_support_khr(
                     physical_device,
                     index as u32,
-                    data.surface,
+                    surface,
                 )? {
                     present = Some(index as u32);
                     break;
@@ -57,17 +57,19 @@ impl QueueFamilyIndices {
 // Physical Device
 //================================================
 
-pub unsafe fn pick_physical_device(instance: &Instance, data: &mut AppData) -> Result<()> {
+pub unsafe fn pick_physical_device(
+    instance: &Instance,
+    surface: vk::SurfaceKHR)
+-> Result<(vk::PhysicalDevice, vk::SampleCountFlags)> {
     for physical_device in instance.enumerate_physical_devices()? {
         let properties = instance.get_physical_device_properties(physical_device);
 
-        if let Err(error) = check_physical_device(instance, data, physical_device) {
+        if let Err(error) = check_physical_device(instance, surface, physical_device) {
             warn!("Skipping physical device (`{}`): {}", properties.device_name, error);
         } else {
             info!("Selected physical device (`{}`).", properties.device_name);
-            data.physical_device = physical_device;
-            data.msaa_samples = get_max_msaa_samples(instance, data);
-            return Ok(());
+            let msaa_samples = get_max_msaa_samples(instance, physical_device);
+            return Ok((physical_device, msaa_samples));
         }
     }
 
@@ -76,13 +78,13 @@ pub unsafe fn pick_physical_device(instance: &Instance, data: &mut AppData) -> R
 
 pub unsafe fn check_physical_device(
     instance: &Instance,
-    data: &AppData,
+    surface: vk::SurfaceKHR,
     physical_device: vk::PhysicalDevice,
 ) -> Result<()> {
-    QueueFamilyIndices::get(instance, data, physical_device)?;
+    QueueFamilyIndices::get(instance, surface, physical_device)?;
     check_physical_device_extensions(instance, physical_device)?;
 
-    let support = SwapchainSupport::get(instance, data, physical_device)?;
+    let support = SwapchainSupport::get(instance, surface, physical_device)?;
     if support.formats.is_empty() || support.present_modes.is_empty() {
         return Err(anyhow!(SuitabilityError("Insufficient swapchain support.")));
     }
@@ -113,9 +115,9 @@ unsafe fn check_physical_device_extensions(
 
 unsafe fn get_max_msaa_samples(
     instance: &Instance,
-    data: &AppData,
+    physical_device: vk::PhysicalDevice,
 ) -> vk::SampleCountFlags {
-    let properties = instance.get_physical_device_properties(data.physical_device);
+    let properties = instance.get_physical_device_properties(physical_device);
     let counts = properties.limits.framebuffer_color_sample_counts
         & properties.limits.framebuffer_depth_sample_counts;
     [vk::SampleCountFlags::_64,
@@ -134,9 +136,13 @@ unsafe fn get_max_msaa_samples(
 // Logical Device
 //================================================
 
-pub unsafe fn create_logical_device(instance: &Instance, data: &mut AppData) -> Result<Device> {
+pub unsafe fn create_logical_device(
+    instance: &Instance, 
+    surface: vk::SurfaceKHR, 
+    physical_device: vk::PhysicalDevice)
+ -> Result<(Device, vk::Queue, vk::Queue)> {
     // Queue Create Infos
-    let indices = QueueFamilyIndices::get(instance, data, data.physical_device)?;
+    let indices = QueueFamilyIndices::get(instance, surface, physical_device)?;
 
     let mut unique_indices = HashSet::new();
     unique_indices.insert(indices.graphics);
@@ -176,11 +182,11 @@ pub unsafe fn create_logical_device(instance: &Instance, data: &mut AppData) -> 
         .enabled_extension_names(&extensions)
         .enabled_features(&features);
 
-    let device = instance.create_device(data.physical_device, &info, None)?;
+    let device = instance.create_device(physical_device, &info, None)?;
 
     // Queues
-    data.graphics_queue = device.get_device_queue(indices.graphics, 0);
-    data.present_queue = device.get_device_queue(indices.present, 0);
+    let graphics_queue = device.get_device_queue(indices.graphics, 0);
+    let present_queue = device.get_device_queue(indices.present, 0);
 
-    Ok(device)
+    Ok((device, graphics_queue, present_queue))
 }

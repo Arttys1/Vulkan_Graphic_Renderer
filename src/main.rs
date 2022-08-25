@@ -1,16 +1,18 @@
 #![allow(dead_code)]
 mod renderer;
-use renderer::renderer::Renderer;
+use renderer::{renderer::Renderer};
 
 use chrono::{DateTime, Local, Duration};
 use winit::{
     dpi::LogicalSize,
-    event::{Event, WindowEvent, ElementState, VirtualKeyCode},
+    event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder
 };
-
 use anyhow::Result;
+use nalgebra_glm as glm;
+
+use crate::renderer::{vertex::Vertex, vertexbuffers::*, texture::*, model::*};
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -24,6 +26,37 @@ fn main() -> Result<()> {
 
     // App
     let mut app = Renderer::create(&window)?;
+    {                        
+        let vertices : Vec::<Vertex> = vec![
+            Vertex::new(glm::vec3(-0.5, -0.5, 0.0),glm::vec3(1.0, 0.0, 0.0),glm::vec2(1.0, 0.0)),
+            Vertex::new(glm::vec3(0.5, -0.5, 0.0), glm::vec3(0.0, 1.0, 0.0), glm::vec2(0.0, 0.0)),
+            Vertex::new(glm::vec3(0.5, 0.5, 0.0), glm::vec3(0.0, 0.0, 1.0), glm::vec2(0.0, 1.0)),
+            Vertex::new(glm::vec3(-0.5, 0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
+            //
+            Vertex::new(glm::vec3(-0.5, -0.5, -0.5), glm::vec3(1.0, 0.0, 0.0), glm::vec2(1.0, 0.0)),
+            Vertex::new(glm::vec3(0.5, -0.5, -0.5), glm::vec3(0.0, 1.0, 0.0), glm::vec2(0.0, 0.0)),
+            Vertex::new(glm::vec3(0.5, 0.5, -0.5), glm::vec3(0.0, 0.0, 1.0), glm::vec2(0.0, 1.0)),
+            Vertex::new(glm::vec3(-0.5, 0.5, -0.5), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
+        ];
+        
+        let indices: Vec<u32> = vec!(
+            0, 1, 2, 2, 3, 0,
+            //
+            4, 5, 6, 6, 7, 4
+        );
+
+        let buffer = VertexBuffer::allocate_(&app, vertices, indices)?;
+        let texture = Texture::new(&app, "resources/texture.png")?;
+        app.add_model(Model::construct(buffer, texture)?);
+
+        const TEXTURE_PATH: &str = "resources/viking_room.png";
+        const MODEL_PATH: &str ="resources/viking_room.obj";
+        println!("load models...");
+        app.add_model(Model::read(&app,MODEL_PATH, TEXTURE_PATH)?);
+        app.add_model(Model::read(&app,MODEL_PATH, "resources/texture.png")?);
+        app.add_model(Model::read(&app,MODEL_PATH, "resources/texture.png")?);
+        println!("models loaded.");
+    }
     let mut destroying = false;
     let mut minimized = false;
     event_loop.run(move |event, _, control_flow| {
@@ -46,15 +79,6 @@ fn main() -> Result<()> {
                 } else {
                     minimized = false;
                     app.must_resize();
-                }
-            }
-            Event::WindowEvent { event: WindowEvent::KeyboardInput { input, .. }, .. } => {
-                if input.state == ElementState::Pressed {
-                    match input.virtual_keycode {
-                        Some(VirtualKeyCode::Left) if app.models > 1 => app.models -= 1,
-                        Some(VirtualKeyCode::Right) if app.models < 4 => app.models += 1,
-                        _ => { }
-                    }
                 }
             }
             // Destroy our Vulkan app.

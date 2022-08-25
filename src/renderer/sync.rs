@@ -4,7 +4,6 @@ use vulkanalia::{
 use anyhow::{Result};
 
 use crate::renderer::{
-    appdata::AppData,
     renderer::MAX_FRAMES_IN_FLIGHT,
 };
 
@@ -12,17 +11,21 @@ use crate::renderer::{
 // Sync objects
 //================================================
 
-pub unsafe fn create_sync_objects(device: &Device, data: &mut AppData) -> Result<()> {
+pub unsafe fn create_sync_objects(device: &Device, swapchain_images: &Vec<vk::Image>)
+-> Result<(Vec<vk::Fence>, Vec<vk::Semaphore>, Vec<vk::Semaphore>, Vec<vk::Fence>)> {
     let semaphore_info = vk::SemaphoreCreateInfo::builder();
     let fence_info = vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
 
+    let mut in_flight_fences =  Vec::<vk::Fence>::default();
+    let mut render_finished_semaphores =  Vec::<vk::Semaphore>::default();
+    let mut image_available_semaphores =  Vec::<vk::Semaphore>::default();
     for _ in 0..MAX_FRAMES_IN_FLIGHT {
-        data.image_available_semaphores.push(device.create_semaphore(&semaphore_info, None)?);
-        data.render_finished_semaphores.push(device.create_semaphore(&semaphore_info, None)?);
-        data.in_flight_fences.push(device.create_fence(&fence_info, None)?);
+        image_available_semaphores.push(device.create_semaphore(&semaphore_info, None)?);
+        render_finished_semaphores.push(device.create_semaphore(&semaphore_info, None)?);
+        in_flight_fences.push(device.create_fence(&fence_info, None)?);
     }
 
-    data.images_in_flight = data.swapchain_images.iter().map(|_| vk::Fence::null()).collect();
+    let images_in_flight = swapchain_images.iter().map(|_| vk::Fence::null()).collect();
 
-    Ok(())
+    Ok((in_flight_fences, render_finished_semaphores, image_available_semaphores, images_in_flight))
 }

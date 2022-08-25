@@ -1,24 +1,18 @@
 use std::{
     mem::size_of,
-    fs::File,
-    io::BufReader,
-    collections::HashMap,
     hash::{Hash, Hasher},
 };
 use vulkanalia::{
     prelude::v1_0::*
 };
 use nalgebra_glm as glm;
-use anyhow::Result;
-
-use crate::renderer::appdata::AppData;
 
 //================================================
 // Vertex
 //================================================
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct Vertex {
     pos: glm::Vec3,
     color: glm::Vec3,
@@ -82,49 +76,4 @@ impl Hash for Vertex {
         self.tex_coord[0].to_bits().hash(state);
         self.tex_coord[1].to_bits().hash(state);
     }
-}
-
-//================================================
-// load Model
-//================================================
-
-pub fn load_model(data: &mut AppData) -> Result<()> {
-    let mut reader = BufReader::new(File::open("resources/viking_room.obj")?);
-
-    let (models, _) = tobj::load_obj_buf(&mut reader, true, |_| {
-        Ok((vec![tobj::Material::empty()], HashMap::new()))
-    })?;
-
-    let mut unique_vertices = HashMap::new();
-
-    for model in &models {
-        for index in &model.mesh.indices {
-            let pos_offset = (3 * index) as usize;
-            let tex_coord_offset = (2 * index) as usize;
-
-            let vertex = Vertex {
-                pos: glm::vec3(
-                    model.mesh.positions[pos_offset],
-                    model.mesh.positions[pos_offset + 1],
-                    model.mesh.positions[pos_offset + 2],
-                ),
-                color: glm::vec3(1.0, 1.0, 1.0),
-                tex_coord: glm::vec2(
-                    model.mesh.texcoords[tex_coord_offset],
-                    1.0 - model.mesh.texcoords[tex_coord_offset + 1],
-                ),                
-            };
-
-            if let Some(index) = unique_vertices.get(&vertex) {
-                data.indices.push(*index as u32);
-            } else {
-                let index = data.vertices.len();
-                unique_vertices.insert(vertex, index);
-                data.vertices.push(vertex);
-                data.indices.push(index as u32);
-            }
-        }
-    }    
-
-    Ok(())
 }
