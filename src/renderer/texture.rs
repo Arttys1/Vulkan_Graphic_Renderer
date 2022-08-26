@@ -4,7 +4,6 @@ use {
     anyhow::Result,
     super::{
         image::*,
-        renderer::Renderer,
     }
 };
 #[derive(Debug, Clone)]
@@ -18,9 +17,9 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn empty(renderer: &Renderer) -> Result<Self> {
+    pub fn empty(device: Arc<Device>) -> Result<Self> {
         Ok(Texture {
-            device: renderer.get_device(),
+            device,
             texture_image: vk::Image::default(),
             texture_image_memory: vk::DeviceMemory::default(),
             texture_image_view: vk::ImageView::default(),
@@ -29,17 +28,18 @@ impl Texture {
         })
     }
 
-    pub fn new(renderer: &Renderer, url: &str) -> Result<Self> {
-        let data = renderer.get_appdata();
-        let device = renderer.get_device();
-        unsafe {            
+    pub fn new(device: Arc<Device>,instance: &Instance,
+        physical_device: vk::PhysicalDevice, command_pool: vk::CommandPool, 
+        graphics_queue: vk::Queue, url: &str) -> Result<Self>
+    {
+        unsafe {
             let (texture_image,
                 texture_image_memory,
                 mip_levels
-            ) = load_texture_image(renderer.get_instance(), &device, data.physical_device(), data.command_pool(), data.graphics_queue(), url)?;
+            ) = load_texture_image(instance, &device, physical_device, command_pool, graphics_queue, url)?;
             let texture_image_view = load_texture_image_view(&device, texture_image, mip_levels)?;
             let texture_sampler = load_texture_sampler(&device, mip_levels)?;
-                    
+        
             Ok(Texture {
                 device,
                 texture_image,

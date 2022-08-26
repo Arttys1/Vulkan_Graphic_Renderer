@@ -101,11 +101,11 @@ pub unsafe fn create_pipeline(
         .attachments(attachments)
         .blend_constants([0.0, 0.0, 0.0, 0.0]);
 
-    
+    //push constant
     let vert_push_constant_range = vk::PushConstantRange::builder()
         .stage_flags(vk::ShaderStageFlags::VERTEX)
         .offset(0)
-        .size(64 /* 16 × 4 byte floats */);
+        .size(128 /* 2 glm::mat4 */);
 
     // Layout
     let set_layouts = &[descriptor_set_layout];

@@ -2,7 +2,6 @@ use vulkanalia::{
     prelude::v1_0::*
 };
 use std::time::Instant;
-use nalgebra_glm as glm;
 use anyhow::Result;
 use crate::renderer::{
     appdata::AppData,
@@ -119,25 +118,24 @@ unsafe fn update_secondary_command_buffer(
 
     let command_buffer = device.allocate_command_buffers(&allocate_info)?[0];
 
+    //model who will be draw
     let model = data.at_model(model_index);
     let descriptor = &model.descriptor().descriptor_sets()[image_index];
     let model_buffer = model.buffer();
 
-    let y = (((model_index % 2) as f32) * 2.5) - 1.25;
-    let z = (((model_index / 2) as f32) * -2.0) + 1.0;
-    let time = start.elapsed().as_secs_f32();
+    //push constant data
+    let elapsed_time = start.elapsed().as_secs_f32();
+    let push_constant_object = model.uniform_buffer().update_push_constant(model_index, elapsed_time);
 
-    let mat_model = glm::translate(
-        &glm::identity(),
-        &glm::vec3(0.0, y, z),
-    );    
-    let mat_model = glm::rotate(
-        &mat_model,
-        time * glm::radians(&glm::vec1(90.0))[0],
-        &glm::vec3(0.0, 0.0, 1.0),
-    );
-    let (_, model_bytes, _) = mat_model.as_slice().align_to::<u8>();
+    let mat_model = push_constant_object.model();
+    let view = push_constant_object.view();
+    let model_slice = mat_model.as_slice();
+    let view_slice = view.as_slice();
+    let mut vec_push_constant = Vec::from(model_slice);
+    vec_push_constant.append(&mut Vec::from(view_slice));
+    let (_, push_constant_data, _) = vec_push_constant.as_slice().align_to::<u8>();
 
+    //info command buffer
     let inheritance_info = vk::CommandBufferInheritanceInfo::builder()
         .render_pass(data.render_pass())
         .subpass(0)
@@ -166,7 +164,7 @@ unsafe fn update_secondary_command_buffer(
         data.pipeline_layout(),
         vk::ShaderStageFlags::VERTEX,
         0,
-        model_bytes,
+        push_constant_data,
     );
     device.cmd_draw_indexed(command_buffer, model_buffer.indices_len() as u32, 1, 0, 0, 0);
 

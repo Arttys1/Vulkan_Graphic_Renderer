@@ -1,3 +1,7 @@
+use std::sync::Arc;
+
+use super::renderer::Renderer;
+
 use {
     anyhow::{Result, anyhow},
     std::{
@@ -10,7 +14,6 @@ use {
         texture::Texture,
         vertexbuffers::VertexBuffer,
         vertex::Vertex, 
-        renderer::Renderer,
         uniformbuffers::UniformBuffer,
         descriptor::Descriptor,
     },
@@ -26,19 +29,24 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn read(renderer: &Renderer, model_url: &str, texture_url: &str) -> Result<Self> {
+    pub fn read(device: Arc<Device>, instance: &Instance, 
+        physical_device: vk::PhysicalDevice, command_pool: vk::CommandPool, 
+        graphics_queue: vk::Queue, swapchain_images: &Vec<vk::Image>,
+        descriptor_set_layout: vk::DescriptorSetLayout, model_path: &str, 
+        texture_path: &str) -> Result<Self> 
+    {
         let mut vertices : Vec<Vertex> = Vec::default();
         let mut indices : Vec<u32> = Vec::default();
-        read_model(model_url, &mut vertices, &mut indices)?;
+        read_model(model_path, &mut vertices, &mut indices)?;
         
-        let buffer = VertexBuffer::allocate_(renderer, vertices, indices)?;
-        let texture = Texture::new(renderer, texture_url)?;
-        let uniform_buffer = UniformBuffer::new(renderer)?;
-        let data = renderer.get_appdata();
-        let device = renderer.get_device();
-        let descriptor = Descriptor::new(device, 
-            data.swapchain_images(),
-            data.descriptor_set_layout(), 
+        let buffer = VertexBuffer::new(device.clone(), instance, physical_device, command_pool, graphics_queue, vertices, indices)?;
+        let texture = Texture::new(device.clone(), instance,physical_device,command_pool,graphics_queue, texture_path)?;
+        let mut uniform_buffer = UniformBuffer::new(device.clone(), instance,physical_device,swapchain_images)?;
+        uniform_buffer.set_fn_update_ubo(Renderer::update_ubo);
+        uniform_buffer.set_fn_update_push_constant(Renderer::update_push_constant);
+        let descriptor = Descriptor::new(device.clone(),             
+            swapchain_images,
+            descriptor_set_layout, 
             &uniform_buffer, 
             &texture)?;
         Ok(Model {
@@ -99,7 +107,7 @@ impl Model {
         &self.descriptor
     }
 
-    pub fn uniform_buffer_mut(&mut self) -> &UniformBuffer {
+    pub fn uniform_buffer(&self) -> &UniformBuffer {
         &self.uniform_buffer
     }
 }

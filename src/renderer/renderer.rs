@@ -1,3 +1,6 @@
+use super::{vertex::Vertex, vertexbuffers::VertexBuffer, texture::Texture, uniformbuffers::{UniformBuffer, UniformBufferObject, PushConstantObject}, descriptor::Descriptor};
+use nalgebra_glm as glm;
+
 use {
     std::{time::Instant, sync::Arc},
     vulkanalia::{
@@ -114,6 +117,76 @@ impl Renderer {
             Ok(())
         }
     } 
+
+    pub fn create_model(&mut self, model_path: &str, texture_path: &str) -> Result<()> {
+        let model = Model::read(
+            self.data.device(),
+            self.data.instance(),
+            self.data.physical_device(),
+            self.data.command_pool(),
+            self.data.graphics_queue(),
+            self.data.swapchain_images(),
+            self.data.descriptor_set_layout(),
+            model_path, texture_path)?;
+        self.data.push_model(model);
+        Ok(())
+    }
+
+    pub fn construct_model(&mut self, vertices: Vec<Vertex>, indices: Vec<u32>, texture_path: &str) -> Result<()> {
+        let device = self.data.device();
+        let instance = self.data.instance();
+        let physical_device = self.data.physical_device();
+        let command_pool = self.data.command_pool();
+        let graphics_queue = self.data.graphics_queue();
+        let swapchain_images = self.data.swapchain_images();
+        let descriptor_set_layout = self.data.descriptor_set_layout();
+
+        let buffer = VertexBuffer::new(device.clone(), instance, physical_device, command_pool, graphics_queue, vertices, indices)?;
+        let texture = Texture::new(device.clone(), instance,physical_device,command_pool,graphics_queue, texture_path)?;
+        let mut uniform_buffer = UniformBuffer::new(device.clone(), instance,physical_device,swapchain_images)?;
+        uniform_buffer.set_fn_update_ubo(Renderer::update_ubo);
+        uniform_buffer.set_fn_update_push_constant(Renderer::update_push_constant);
+        let descriptor = Descriptor::new(device.clone(),             
+            swapchain_images,
+            descriptor_set_layout, 
+            &uniform_buffer, 
+            &texture)?;
+
+        let model = Model::construct(buffer, texture, uniform_buffer, descriptor)?;    
+        self.data.push_model(model);
+        Ok(())
+    }
+
+    pub(crate) fn update_ubo(swapchain_width: u32, swapchain_height: u32) -> UniformBufferObject {        
+            let mut proj = glm::perspective_rh_zo(
+                swapchain_width as f32 / swapchain_height as f32,
+                glm::radians(&glm::vec1(45.0))[0],
+                0.1,
+                10.0,
+            );        
+            proj[(1, 1)] *= -1.0;
+            UniformBufferObject::construct(proj)
+    }
+    pub(crate) fn update_push_constant(model_index: usize, elapsed_time: f32) -> PushConstantObject {
+        let y = (((model_index % 2) as f32) * 2.5) - 1.25;
+        let z = (((model_index / 2) as f32) * -2.0) + 1.0;
+
+        let model = glm::translate(
+            &glm::identity(),
+            &glm::vec3(0.0, y, z),
+        );    
+        let model = glm::rotate(
+            &model,
+            elapsed_time * glm::radians(&glm::vec1(90.0))[0],
+            &glm::vec3(0.0, 0.0, 1.0),
+        );
+        let view = glm::look_at(
+            &glm::vec3(6.0f32, 0.0, 2.0),
+            &glm::vec3(0.0, 0.0, 0.0),
+            &glm::vec3(0.0, 0.0, 1.0),
+        );
+        PushConstantObject::construct(view, model)
+    }
 
     pub fn clean(&mut self) {
         self.data.clean();

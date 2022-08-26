@@ -10,7 +10,6 @@ use anyhow::{Result, anyhow};
 use crate::renderer::{
     vertex::*,
     buffers_tools::*,
-    renderer::Renderer,
 };
 
 #[derive(Debug, Clone)]
@@ -30,10 +29,10 @@ pub struct VertexBuffer {
 }
 
 impl VertexBuffer {
-    pub fn new(renderer: &Renderer) -> Result<Self> {
+    pub fn empty(device: Arc<Device>) -> Result<Self> {
         Ok(
         VertexBuffer {
-            device: renderer.get_device(),
+            device,
             is_allocated: false,
             vertices: Vec::default(),
             indices: Vec::default(),
@@ -44,7 +43,10 @@ impl VertexBuffer {
         })
     } 
 
-    pub fn allocate(&mut self, renderer: &Renderer, vertices: Vec<Vertex>, indices: Vec<u32>) -> Result<()> {
+    pub fn allocate(&mut self, device: Arc<Device>, instance: &Instance,
+        physical_device: vk::PhysicalDevice, command_pool: vk::CommandPool, 
+        graphics_queue: vk::Queue, vertices: Vec<Vertex>, indices: Vec<u32>) -> Result<()>
+    {
         if vertices.is_empty() || indices.is_empty() {
             return Err(anyhow!("vertices or indices can't be empty"));
         }
@@ -52,13 +54,9 @@ impl VertexBuffer {
             self.clean();
         }
 
-        let instance = renderer.get_instance();
-        let device = renderer.get_device();
-        let data = renderer.get_appdata();
-
         unsafe {
-            let (vertex_buffer, vertex_buffer_memory) = load_vertex_buffer(instance, &device, data.physical_device(), data.command_pool(), data.graphics_queue(), &vertices)?;
-            let (index_buffer, index_buffer_memory) = load_index_buffer(instance, &device, data.physical_device(), data.command_pool(), data.graphics_queue(), &indices)?;
+            let (vertex_buffer, vertex_buffer_memory) = load_vertex_buffer(instance, &device, physical_device, command_pool, graphics_queue, &vertices)?;
+            let (index_buffer, index_buffer_memory) = load_index_buffer(instance, &device, physical_device, command_pool, graphics_queue, &indices)?;
             self.device = device;
             self.vertices = vertices;
             self.indices = indices;
@@ -67,14 +65,16 @@ impl VertexBuffer {
             self.index_buffer = index_buffer;
             self.index_buffer_memory = index_buffer_memory;         
             self.is_allocated = true;     
+            Ok(())
         }
-
-        Ok(())
     }
 
-    pub fn allocate_(renderer: &Renderer, vertices: Vec<Vertex>, indices: Vec<u32>) -> Result<Self> {
-        let mut buffer = VertexBuffer::new(renderer)?;
-        buffer.allocate(renderer, vertices, indices)?;
+    pub fn new(device: Arc<Device>, instance: &Instance,
+        physical_device: vk::PhysicalDevice, command_pool: vk::CommandPool, 
+        graphics_queue: vk::Queue,vertices: Vec<Vertex>, indices: Vec<u32>) -> Result<Self>
+    {
+        let mut buffer = VertexBuffer::empty(device.clone())?;
+        buffer.allocate(device.clone(), instance, physical_device, command_pool, graphics_queue, vertices, indices)?;
         Ok(buffer)
     }
 
