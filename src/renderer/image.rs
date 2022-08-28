@@ -1,38 +1,34 @@
 use std::{
-    fs::File,
-    ptr::copy_nonoverlapping as memcpy,
+    ptr::copy_nonoverlapping as memcpy, 
+    sync::Arc,
 };
 use vulkanalia::{
     prelude::v1_0::*,
 };
 use anyhow::{Result, anyhow};
-use crate::renderer::{
+use crate::{renderer::{
     buffers_tools::*,
-};
+}, tools::texture::Texture};
 
 //================================================
 // texture image
 //================================================
 
-pub unsafe fn load_texture_image(
+pub unsafe fn create_texture_image(
     instance: &Instance,
     device: &Device, 
     physical_device: vk::PhysicalDevice,
     command_pool: vk::CommandPool,
     graphics_queue: vk::Queue,
-    url: &str)
+    texture: Arc<Texture>)
  -> Result<(vk::Image, vk::DeviceMemory, u32)> {
-    // Load
-    let image = File::open(url)?;
+    
+    let data = texture.data();
+    let size = texture.buffer_size() as u64;
+    let width = texture.width();
+    let height = texture.height();
 
-    let decoder = png::Decoder::new(image);
-    let (info, mut reader) = decoder.read_info()?;
-
-    let mut pixels = vec![0; info.buffer_size()];
-    reader.next_frame(&mut pixels)?;
-
-    let size = info.buffer_size() as u64;
-    let mip_levels = (info.width.max(info.height) as f32).log2().floor() as u32 + 1;
+    let mip_levels = (width.max(height) as f32).log2().floor() as u32 + 1;
 
     // Create (staging)
     let (staging_buffer, staging_buffer_memory) = create_buffer(
@@ -47,7 +43,7 @@ pub unsafe fn load_texture_image(
     // Copy (staging)
     let memory = device.map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
 
-    memcpy(pixels.as_ptr(), memory.cast(), pixels.len());
+    memcpy(data.as_ptr(), memory.cast(), data.len());
 
     device.unmap_memory(staging_buffer_memory);
 
@@ -56,8 +52,8 @@ pub unsafe fn load_texture_image(
         instance,
         device,
         physical_device,
-        info.width,
-        info.height,
+        width,
+        height,
         mip_levels,
         vk::SampleCountFlags::_1,
         vk::Format::R8G8B8A8_SRGB,
@@ -84,8 +80,8 @@ pub unsafe fn load_texture_image(
         graphics_queue,
         staging_buffer,
         texture_image,
-        info.width,
-        info.height,
+        width,
+        height,
     )?;
 
     // Cleanup
@@ -101,8 +97,8 @@ pub unsafe fn load_texture_image(
         graphics_queue,
         texture_image,
         vk::Format::R8G8B8A8_SRGB,
-        info.width,
-        info.height,
+        width,
+        height,
         mip_levels,
     )?;
 
@@ -114,7 +110,7 @@ pub unsafe fn load_texture_image(
 // texture image view
 //================================================
 
-pub unsafe fn load_texture_image_view(device: &Device, texture_image: vk::Image, mip_levels: u32) -> Result<vk::ImageView> {
+pub unsafe fn create_texture_image_view(device: &Device, texture_image: vk::Image, mip_levels: u32) -> Result<vk::ImageView> {
     Ok(create_image_view(
         device,
         texture_image,
@@ -128,7 +124,7 @@ pub unsafe fn load_texture_image_view(device: &Device, texture_image: vk::Image,
 // texture sampler
 //================================================
 
-pub unsafe fn load_texture_sampler(device: &Device, mip_levels: u32) -> Result<vk::Sampler> {
+pub unsafe fn create_texture_sampler(device: &Device, mip_levels: u32) -> Result<vk::Sampler> {
     let info = vk::SamplerCreateInfo::builder()
         .mag_filter(vk::Filter::LINEAR)
         .min_filter(vk::Filter::LINEAR)

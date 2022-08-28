@@ -18,8 +18,9 @@ pub struct VertexBuffer {
     is_allocated: bool,
 
 //vertex buffer
-    vertices: Vec<Vertex>,
-    indices: Vec<u32>,
+    // vertices: Vec<Vertex>,
+    // indices: Vec<u32>,
+    indices_size: usize,
     vertex_buffer: vk::Buffer,
     vertex_buffer_memory: vk::DeviceMemory,
 
@@ -34,8 +35,9 @@ impl VertexBuffer {
         VertexBuffer {
             device,
             is_allocated: false,
-            vertices: Vec::default(),
-            indices: Vec::default(),
+            indices_size: 0,
+            // vertices: Vec::default(),
+            // indices: Vec::default(),
             vertex_buffer: vk::Buffer::default(),
             vertex_buffer_memory: vk::DeviceMemory::default(),
             index_buffer: vk::Buffer::default(),
@@ -45,7 +47,7 @@ impl VertexBuffer {
 
     pub fn allocate(&mut self, device: Arc<Device>, instance: &Instance,
         physical_device: vk::PhysicalDevice, command_pool: vk::CommandPool, 
-        graphics_queue: vk::Queue, vertices: Vec<Vertex>, indices: Vec<u32>) -> Result<()>
+        graphics_queue: vk::Queue, vertices: &Vec<Vertex>, indices: &Vec<u32>) -> Result<()>
     {
         if vertices.is_empty() || indices.is_empty() {
             return Err(anyhow!("vertices or indices can't be empty"));
@@ -58,8 +60,9 @@ impl VertexBuffer {
             let (vertex_buffer, vertex_buffer_memory) = load_vertex_buffer(instance, &device, physical_device, command_pool, graphics_queue, &vertices)?;
             let (index_buffer, index_buffer_memory) = load_index_buffer(instance, &device, physical_device, command_pool, graphics_queue, &indices)?;
             self.device = device;
-            self.vertices = vertices;
-            self.indices = indices;
+            // self.vertices = vertices;
+            // self.indices = indices;
+            self.indices_size = indices.len();
             self.vertex_buffer = vertex_buffer;
             self.vertex_buffer_memory = vertex_buffer_memory;
             self.index_buffer = index_buffer;
@@ -71,7 +74,7 @@ impl VertexBuffer {
 
     pub fn new(device: Arc<Device>, instance: &Instance,
         physical_device: vk::PhysicalDevice, command_pool: vk::CommandPool, 
-        graphics_queue: vk::Queue,vertices: Vec<Vertex>, indices: Vec<u32>) -> Result<Self>
+        graphics_queue: vk::Queue, vertices: &Vec<Vertex>, indices: &Vec<u32>) -> Result<Self>
     {
         let mut buffer = VertexBuffer::empty(device.clone())?;
         buffer.allocate(device.clone(), instance, physical_device, command_pool, graphics_queue, vertices, indices)?;
@@ -93,7 +96,7 @@ impl VertexBuffer {
     pub fn vertex_buffer(&self) -> vk::Buffer { self.vertex_buffer }
     pub fn index_buffer(&self) -> vk::Buffer { self.index_buffer }
     pub fn is_allocated(&self) -> bool { self.is_allocated }
-    pub fn indices_len(&self) -> usize { self.indices.len() }
+    pub fn indices_len(&self) -> usize { self.indices_size }
 }
 
 impl Drop for VertexBuffer {

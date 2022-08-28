@@ -1,7 +1,7 @@
 pub mod renderer;
-pub mod texture;
+pub mod vulkan_texture;
 pub mod vertexbuffers;
-pub mod model;
+pub mod vulkan_model;
 pub mod uniformbuffers;
 pub mod vertex;
 mod appdata;

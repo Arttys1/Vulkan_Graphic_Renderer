@@ -1,3 +1,5 @@
+use crate::tools::texture::Texture;
+
 use {
     std::sync::Arc,
     vulkanalia::prelude::v1_0::*,
@@ -7,7 +9,7 @@ use {
     }
 };
 #[derive(Debug, Clone)]
-pub struct Texture {
+pub struct VulkanTexture {
     device: Arc<Device>,
     texture_image: vk::Image,
     texture_image_memory: vk::DeviceMemory,
@@ -16,9 +18,9 @@ pub struct Texture {
     is_allocated: bool,
 }
 
-impl Texture {
+impl VulkanTexture {
     pub fn empty(device: Arc<Device>) -> Result<Self> {
-        Ok(Texture {
+        Ok(VulkanTexture {
             device,
             texture_image: vk::Image::default(),
             texture_image_memory: vk::DeviceMemory::default(),
@@ -30,17 +32,17 @@ impl Texture {
 
     pub fn new(device: Arc<Device>,instance: &Instance,
         physical_device: vk::PhysicalDevice, command_pool: vk::CommandPool, 
-        graphics_queue: vk::Queue, url: &str) -> Result<Self>
+        graphics_queue: vk::Queue, texture: Arc<Texture>) -> Result<Self>
     {
         unsafe {
             let (texture_image,
                 texture_image_memory,
                 mip_levels
-            ) = load_texture_image(instance, &device, physical_device, command_pool, graphics_queue, url)?;
-            let texture_image_view = load_texture_image_view(&device, texture_image, mip_levels)?;
-            let texture_sampler = load_texture_sampler(&device, mip_levels)?;
+            ) = create_texture_image(instance, &device, physical_device, command_pool, graphics_queue, texture)?;
+            let texture_image_view = create_texture_image_view(&device, texture_image, mip_levels)?;
+            let texture_sampler = create_texture_sampler(&device, mip_levels)?;
         
-            Ok(Texture {
+            Ok(VulkanTexture {
                 device,
                 texture_image,
                 texture_image_memory,
@@ -73,7 +75,7 @@ impl Texture {
     }
 }
 
-impl Drop for Texture {
+impl Drop for VulkanTexture {
     fn drop(&mut self) {
         self.clean();
     }

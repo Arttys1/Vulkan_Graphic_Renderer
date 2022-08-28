@@ -1,6 +1,3 @@
-use super::{vertex::Vertex, vertexbuffers::VertexBuffer, texture::Texture, uniformbuffers::{UniformBuffer, UniformBufferObject, PushConstantObject}, descriptor::Descriptor};
-use nalgebra_glm as glm;
-
 use {
     std::{time::Instant, sync::Arc},
     vulkanalia::{
@@ -10,13 +7,20 @@ use {
             KhrSwapchainExtension,
         },
     },
+    crate::tools::{texture::Texture, model::Model},
+    nalgebra_glm as glm,
     winit::window::Window,
     anyhow::{anyhow, Result},
-    crate::renderer::{
+    super::{
         appdata::*,
         commandbuffers::*, 
-        model::Model,
-    }
+        vulkan_model::VulkanModel,
+        vertex::Vertex, 
+        vertexbuffers::VertexBuffer, 
+        vulkan_texture::VulkanTexture, 
+        uniformbuffers::{UniformBuffer, UniformBufferObject, PushConstantObject}, 
+        descriptor::Descriptor,
+    },
 };
 pub const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
@@ -118,8 +122,8 @@ impl Renderer {
         }
     } 
 
-    pub fn create_model(&mut self, model_path: &str, texture_path: &str) -> Result<()> {
-        let model = Model::read(
+    pub fn create_model(&mut self, model: Arc<Model>, texture: Arc<Texture>) -> Result<()> {
+        let model = VulkanModel::read(
             self.data.device(),
             self.data.instance(),
             self.data.physical_device(),
@@ -127,12 +131,12 @@ impl Renderer {
             self.data.graphics_queue(),
             self.data.swapchain_images(),
             self.data.descriptor_set_layout(),
-            model_path, texture_path)?;
+            model, texture)?;
         self.data.push_model(model);
         Ok(())
     }
 
-    pub fn construct_model(&mut self, vertices: Vec<Vertex>, indices: Vec<u32>, texture_path: &str) -> Result<()> {
+    pub fn construct_model(&mut self, vertices: &Vec<Vertex>, indices: &Vec<u32>, texture: Arc<Texture>) -> Result<()> {
         let device = self.data.device();
         let instance = self.data.instance();
         let physical_device = self.data.physical_device();
@@ -142,7 +146,7 @@ impl Renderer {
         let descriptor_set_layout = self.data.descriptor_set_layout();
 
         let buffer = VertexBuffer::new(device.clone(), instance, physical_device, command_pool, graphics_queue, vertices, indices)?;
-        let texture = Texture::new(device.clone(), instance,physical_device,command_pool,graphics_queue, texture_path)?;
+        let texture = VulkanTexture::new(device.clone(), instance,physical_device,command_pool,graphics_queue, texture)?;
         let mut uniform_buffer = UniformBuffer::new(device.clone(), instance,physical_device,swapchain_images)?;
         uniform_buffer.set_fn_update_ubo(Renderer::update_ubo);
         uniform_buffer.set_fn_update_push_constant(Renderer::update_push_constant);
@@ -152,7 +156,7 @@ impl Renderer {
             &uniform_buffer, 
             &texture)?;
 
-        let model = Model::construct(buffer, texture, uniform_buffer, descriptor)?;    
+        let model = VulkanModel::construct(buffer, texture, uniform_buffer, descriptor)?;    
         self.data.push_model(model);
         Ok(())
     }
@@ -192,7 +196,7 @@ impl Renderer {
         self.data.clean();
     }
     
-    pub fn add_model(&mut self, model: Model) {
+    pub fn add_model(&mut self, model: VulkanModel) {
         self.data.push_model(model);
     }
 

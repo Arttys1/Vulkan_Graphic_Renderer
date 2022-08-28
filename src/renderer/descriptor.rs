@@ -10,7 +10,7 @@ use {
             UniformBuffer, 
             UniformBufferObject
         },
-         texture::Texture,
+         vulkan_texture::VulkanTexture,
     },
 };
 
@@ -28,25 +28,25 @@ impl Descriptor {
         swapchain_images: &Vec<vk::Image>, 
         descriptor_set_layout: vk::DescriptorSetLayout, 
         uniform_buffers: &UniformBuffer,
-        texture: &Texture,) -> Result<Self> 
+        texture: &VulkanTexture,) -> Result<Self> 
     {
         unsafe {
-        let descriptor_pool = create_descriptor_pool(&device, swapchain_images)?;
-        let descriptor_sets = create_descriptor_sets(
-            &device,
-            swapchain_images,
-            descriptor_set_layout,
-            uniform_buffers.uniform_buffers(),
-            descriptor_pool,
-            texture.texture_image_view(),
-            texture.texture_sampler())?;
-
-            Ok(Descriptor{
-                device,
+            let descriptor_pool = create_descriptor_pool(&device, swapchain_images)?;
+            let descriptor_sets = create_descriptor_sets(
+                &device,
+                swapchain_images,
+                descriptor_set_layout,
+                uniform_buffers.uniform_buffers(),
                 descriptor_pool,
-                descriptor_sets,
-                is_allocated: true,
-            })
+                texture.texture_image_view(),
+                texture.texture_sampler())?;
+
+                Ok(Descriptor{
+                    device,
+                    descriptor_pool,
+                    descriptor_sets,
+                    is_allocated: true,
+                })
         }
     }
 
@@ -54,7 +54,7 @@ impl Descriptor {
         swapchain_images: &Vec<vk::Image>,
         descriptor_set_layout: vk::DescriptorSetLayout,
         uniform_buffer: &UniformBuffer,
-        texture: &Texture,
+        texture: &VulkanTexture,
     ) -> Result<()> {
         unsafe {
             self.device.destroy_descriptor_pool(self.descriptor_pool, None);

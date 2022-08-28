@@ -17,7 +17,7 @@ use {
         depthbuffers::create_depth_objects, 
         framebuffers::create_framebuffers, 
         sync::create_sync_objects,
-        model::Model,
+        vulkan_model::VulkanModel,
     },
     anyhow::Result,
 };
@@ -70,7 +70,7 @@ pub struct AppData {
     color_image_memory: vk::DeviceMemory,
     color_image_view: vk::ImageView,
 
-    models: Vec<Model>,
+    models: Vec<VulkanModel>,
     is_allocated: bool,
 }
 
@@ -298,9 +298,9 @@ impl AppData {
         Ok(())
     }
 
-    pub fn push_model(&mut self, model: Model) { self.models.push(model); }
-    pub fn models(&self) -> &[Model] { self.models.as_ref() }
-    pub fn at_model(&self, index: usize) -> &Model { &self.models[index] }
+    pub fn push_model(&mut self, model: VulkanModel) { self.models.push(model); }
+    pub fn models(&self) -> &[VulkanModel] { self.models.as_ref() }
+    pub fn at_model(&self, index: usize) -> &VulkanModel { &self.models[index] }
     pub fn update_models(&mut self, image_index: usize) -> Result<()> {
         for i in 0..self.models.len() {
             self.models[i].update(&self.device, self.swapchain_extent, image_index)?;
