@@ -7,19 +7,15 @@ use {
             KhrSwapchainExtension,
         },
     },
-    crate::tools::{texture::Texture, model::Model},
     nalgebra_glm as glm,
     winit::window::Window,
     anyhow::{anyhow, Result},
+    crate::object::Object,
     super::{
         appdata::*,
         commandbuffers::*, 
-        vulkan_model::VulkanModel,
-        vertex::Vertex, 
-        vertexbuffers::VertexBuffer, 
-        vulkan_texture::VulkanTexture, 
-        uniformbuffers::{UniformBuffer, UniformBufferObject, PushConstantObject}, 
-        descriptor::Descriptor,
+        vulkan_model::VulkanModel, 
+        uniformbuffers::MatrixShaderObject,
     },
 };
 pub const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -82,7 +78,6 @@ impl Renderer {
             self.data.images_in_flight_mut()[image_index] = in_flight_fence;
 
             update_command_buffer(&self.device, &mut self.data, image_index, &self.start)?;
-            self.data.update_models(image_index)?;
 
             let wait_semaphores = &[self.data.image_available_semaphores()[self.frame]];
             let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -122,8 +117,8 @@ impl Renderer {
         }
     } 
 
-    pub fn create_model(&mut self, model: Arc<Model>, texture: Arc<Texture>) -> Result<()> {
-        let model = VulkanModel::read(
+    pub fn add_object(&mut self, obj: &dyn Object) -> Result<()> {
+        let model = VulkanModel::from_obj(
             self.data.device(),
             self.data.instance(),
             self.data.physical_device(),
@@ -131,47 +126,12 @@ impl Renderer {
             self.data.graphics_queue(),
             self.data.swapchain_images(),
             self.data.descriptor_set_layout(),
-            model, texture)?;
+            obj)?;
         self.data.push_model(model);
         Ok(())
     }
 
-    pub fn construct_model(&mut self, vertices: &Vec<Vertex>, indices: &Vec<u32>, texture: Arc<Texture>) -> Result<()> {
-        let device = self.data.device();
-        let instance = self.data.instance();
-        let physical_device = self.data.physical_device();
-        let command_pool = self.data.command_pool();
-        let graphics_queue = self.data.graphics_queue();
-        let swapchain_images = self.data.swapchain_images();
-        let descriptor_set_layout = self.data.descriptor_set_layout();
-
-        let buffer = VertexBuffer::new(device.clone(), instance, physical_device, command_pool, graphics_queue, vertices, indices)?;
-        let texture = VulkanTexture::new(device.clone(), instance,physical_device,command_pool,graphics_queue, texture)?;
-        let mut uniform_buffer = UniformBuffer::new(device.clone(), instance,physical_device,swapchain_images)?;
-        uniform_buffer.set_fn_update_ubo(Renderer::update_ubo);
-        uniform_buffer.set_fn_update_push_constant(Renderer::update_push_constant);
-        let descriptor = Descriptor::new(device.clone(),             
-            swapchain_images,
-            descriptor_set_layout, 
-            &uniform_buffer, 
-            &texture)?;
-
-        let model = VulkanModel::construct(buffer, texture, uniform_buffer, descriptor)?;    
-        self.data.push_model(model);
-        Ok(())
-    }
-
-    pub(crate) fn update_ubo(swapchain_width: u32, swapchain_height: u32) -> UniformBufferObject {        
-            let mut proj = glm::perspective_rh_zo(
-                swapchain_width as f32 / swapchain_height as f32,
-                glm::radians(&glm::vec1(45.0))[0],
-                0.1,
-                10.0,
-            );        
-            proj[(1, 1)] *= -1.0;
-            UniformBufferObject::construct(proj)
-    }
-    pub(crate) fn update_push_constant(model_index: usize, elapsed_time: f32) -> PushConstantObject {
+    pub(crate) fn update_matrix(model_index: usize, elapsed_time: f32, swapchain_width: u32, swapchain_height: u32) -> MatrixShaderObject {
         let y = (((model_index % 2) as f32) * 2.5) - 1.25;
         let z = (((model_index / 2) as f32) * -2.0) + 1.0;
 
@@ -189,7 +149,15 @@ impl Renderer {
             &glm::vec3(0.0, 0.0, 0.0),
             &glm::vec3(0.0, 0.0, 1.0),
         );
-        PushConstantObject::construct(view, model)
+        let mut proj = glm::perspective_rh_zo(
+            swapchain_width as f32 / swapchain_height as f32,
+            glm::radians(&glm::vec1(45.0))[0],
+            0.1,
+            10.0,
+        );        
+        proj[(1, 1)] *= -1.0;
+
+        MatrixShaderObject::construct(view, model, proj)
     }
 
     pub fn clean(&mut self) {

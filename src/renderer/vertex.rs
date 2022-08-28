@@ -53,6 +53,13 @@ impl Vertex {
             .build();
         [pos, color, tex_coord]
     }
+
+    pub fn pos(&self) -> glm::Vec3 { self.pos }
+    pub fn color(&self) -> glm::Vec3 { self.color }
+    pub fn tex_coord(&self) -> glm::Vec2 { self.tex_coord }
+    pub fn set_tex_coord(&mut self, tex_coord: glm::Vec2) { self.tex_coord = tex_coord; }
+    pub fn set_color(&mut self, color: glm::Vec3) { self.color = color; }
+    pub fn set_pos(&mut self, pos: glm::Vec3) { self.pos = pos; }
 }
 
 impl PartialEq for Vertex {

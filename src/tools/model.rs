@@ -1,22 +1,37 @@
-use std::{io::BufReader, fs::File, collections::HashMap};
+use {
+    std::{io::BufReader, fs::File, collections::HashMap},
+    crate::{renderer::{vertex::Vertex}},
+    nalgebra_glm as glm,
+    anyhow::{Result, anyhow},
+};
 
-use crate::renderer::vertex::Vertex;
-use nalgebra_glm as glm;
-use anyhow::{Result, anyhow};
 pub struct Model {
     vertices: Vec<Vertex>,
-    indices: Vec<u32>, 
+    indices: Vec<u32>,
 }
 
 impl Model {
+    pub fn new(path: &String) -> Result<Self> {
+        let mut vertices = Vec::<Vertex>::new();
+        let mut indices = Vec::<u32>::new();
+
+        load_model(path, &mut vertices, &mut indices)?;
+
+        Ok(Self {
+            vertices, indices,  
+        })
+    }
     pub fn construct(vertices: Vec<Vertex>, indices: Vec<u32>) -> Self {
         Self { vertices, indices }
     }
+    pub fn vertices(&self) -> &[Vertex] {
+        self.vertices.as_ref()
+    }
 
-    pub fn vertices(&self) -> &Vec<Vertex> { self.vertices.as_ref() } 
-    pub fn indices(&self) -> &Vec<u32> { self.indices.as_ref() }
+    pub fn indices(&self) -> &[u32] {
+        self.indices.as_ref()
+    }
 }
-
 
 //================================================
 // load Model

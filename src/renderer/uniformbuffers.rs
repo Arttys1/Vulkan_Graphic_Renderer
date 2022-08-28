@@ -12,6 +12,122 @@ use {
     },
 };
 
+#[derive(Debug, Clone)]
+pub struct UniformBuffer {
+    device: Arc<Device>,
+    uniform_buffers: Vec<vk::Buffer>,
+    uniform_buffers_memory: Vec<vk::DeviceMemory>,
+    fn_update_matrix: fn(usize, f32, u32, u32) -> MatrixShaderObject,
+    is_allocated: bool,
+}
+
+impl UniformBuffer {
+    pub fn new(device: Arc<Device>, instance: &Instance, physical_device: vk::PhysicalDevice, swapchain_images: &Vec<vk::Image>) -> Result<Self> {
+        unsafe {
+            let (uniform_buffers, 
+                uniform_buffers_memory,
+            ) = create_uniform_buffers(instance, &device, physical_device, swapchain_images)?;
+            Ok(UniformBuffer {
+                device,
+                uniform_buffers,
+                uniform_buffers_memory,
+                fn_update_matrix: |_, _, _, _| -> MatrixShaderObject { MatrixShaderObject::identity() },
+                is_allocated: true,
+            })
+        }
+
+    }
+
+    pub fn clean(&mut self) {
+        if self.is_allocated {
+            unsafe {
+            self.uniform_buffers.iter()
+                .for_each(|b| self.device.destroy_buffer(*b, None));
+            self.uniform_buffers_memory.iter()
+                .for_each(|m| self.device.free_memory(*m, None));
+            }
+            self.is_allocated = false;
+        }
+    }
+
+    pub fn reload_swapchain_models(&mut self, instance: &Instance, physical_device: vk::PhysicalDevice, swapchain_images: &Vec<vk::Image>) -> Result<()> {
+        self.clean();
+        unsafe {
+            let (uniform_buffers, uniform_buffers_memory) = create_uniform_buffers(instance, &self.device, physical_device, swapchain_images)?;
+            self.uniform_buffers = uniform_buffers;
+            self.uniform_buffers_memory = uniform_buffers_memory;
+            self.is_allocated = true;
+        }
+        Ok(())
+    }
+
+    pub fn set_fn_update_matrix(&mut self, f: fn(usize, f32, u32, u32) -> MatrixShaderObject) {
+        self.fn_update_matrix = f;
+    }
+
+    pub unsafe fn update_matrix(&self, device: &Device,
+        swapchain_extent: vk::Extent2D, image_index: usize,
+        model_index: usize, elapsed_time: f32) -> Result<PushConstantObject> {
+        let fn_update = self.fn_update_matrix;
+        let matrix = fn_update(model_index, elapsed_time, swapchain_extent.width, swapchain_extent.height);
+        let ubo = matrix.to_ubo();
+        let pcs = matrix.to_push_constant();
+
+        let memory = device.map_memory(
+            self.uniform_buffers_memory[image_index],
+            0,
+            size_of::<UniformBufferObject>() as u64,
+            vk::MemoryMapFlags::empty(),
+        )?;
+        
+        memcpy(&ubo, memory.cast(), 1);
+        
+        device.unmap_memory(self.uniform_buffers_memory[image_index]);    
+    
+        Ok(pcs)
+    }
+
+    pub(crate) fn is_allocated(&self) -> bool {
+        self.is_allocated
+    }
+
+    pub fn uniform_buffers(&self) -> &Vec<vk::Buffer> {
+       &self.uniform_buffers 
+    }
+}
+
+impl Drop for UniformBuffer {
+    fn drop(&mut self) {
+        self.clean();
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct MatrixShaderObject {
+    view: glm::Mat4,
+    model: glm::Mat4,
+    proj: glm::Mat4,
+}
+impl MatrixShaderObject {
+    pub fn construct(view: glm::Mat4, model: glm::Mat4, proj: glm::Mat4) -> Self {
+        Self { view, model, proj }
+    }
+    fn identity() -> Self {
+        Self { view: glm::identity(), model: glm::identity(), proj: glm::identity(), }
+    }
+    pub fn view(&self) -> glm::Mat4 { self.view }
+    pub fn model(&self) -> glm::Mat4 { self.model }
+    pub fn proj(&self) -> glm::Mat4 { self.proj }
+
+    pub fn to_ubo(&self) -> UniformBufferObject {
+        UniformBufferObject { proj: self.proj }
+    }
+    pub fn to_push_constant(&self) -> PushConstantObject {
+        PushConstantObject { view: self.view, model: self.model }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct UniformBufferObject {
@@ -47,103 +163,6 @@ impl PushConstantObject {
     pub fn model(&self) -> glm::Mat4 { self.model }
     pub fn set_view(&mut self, view: glm::Mat4) { self.view = view; }
     pub fn set_model(&mut self, model: glm::Mat4) { self.model = model; }
-}
-
-#[derive(Debug, Clone)]
-pub struct UniformBuffer {
-    device: Arc<Device>,
-    uniform_buffers: Vec<vk::Buffer>,
-    uniform_buffers_memory: Vec<vk::DeviceMemory>,
-    fn_update_ubo: fn(u32, u32) -> UniformBufferObject,
-    fn_update_push_constant: fn(usize, f32) -> PushConstantObject,
-    is_allocated: bool,
-}
-
-impl UniformBuffer {
-    pub fn new(device: Arc<Device>, instance: &Instance, physical_device: vk::PhysicalDevice, swapchain_images: &Vec<vk::Image>) -> Result<Self> {
-        unsafe {
-            let (uniform_buffers, 
-                uniform_buffers_memory,
-            ) = create_uniform_buffers(instance, &device, physical_device, swapchain_images)?;
-            Ok(UniformBuffer {
-                device,
-                uniform_buffers,
-                uniform_buffers_memory,
-                fn_update_ubo: |_, _| -> UniformBufferObject { UniformBufferObject::identity() },
-                fn_update_push_constant: |_, _| -> PushConstantObject { PushConstantObject::identity() },
-                is_allocated: true,
-            })
-        }
-
-    }
-
-    pub fn clean(&mut self) {
-        if self.is_allocated {
-            unsafe {
-            self.uniform_buffers.iter()
-                .for_each(|b| self.device.destroy_buffer(*b, None));
-            self.uniform_buffers_memory.iter()
-                .for_each(|m| self.device.free_memory(*m, None));
-            }
-            self.is_allocated = false;
-        }
-    }
-
-    pub fn reload_swapchain_models(&mut self, instance: &Instance, physical_device: vk::PhysicalDevice, swapchain_images: &Vec<vk::Image>) -> Result<()> {
-        self.clean();
-        unsafe {
-            let (uniform_buffers, uniform_buffers_memory) = create_uniform_buffers(instance, &self.device, physical_device, swapchain_images)?;
-            self.uniform_buffers = uniform_buffers;
-            self.uniform_buffers_memory = uniform_buffers_memory;
-            self.is_allocated = true;
-        }
-        Ok(())
-    }
-
-    pub fn set_fn_update_ubo(&mut self, f: fn(u32, u32) -> UniformBufferObject) {
-        self.fn_update_ubo = f;
-    }
-    pub fn set_fn_update_push_constant(&mut self, f: fn(usize, f32) -> PushConstantObject) {
-        self.fn_update_push_constant = f;
-    }
-
-    pub unsafe fn update_uniform_buffer(&mut self, device: &Device, swapchain_extent: vk::Extent2D, image_index: usize) -> Result<()> {
-        let fn_update = self.fn_update_ubo;
-        let ubo = fn_update(swapchain_extent.width, swapchain_extent.height);
-    
-        let memory = device.map_memory(
-            self.uniform_buffers_memory[image_index],
-            0,
-            size_of::<UniformBufferObject>() as u64,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        
-        memcpy(&ubo, memory.cast(), 1);
-        
-        device.unmap_memory(self.uniform_buffers_memory[image_index]);    
-    
-        Ok(())
-    }
-
-    pub unsafe fn update_push_constant(&self, model_index: usize, elapsed_time: f32) -> PushConstantObject {
-        let push_constant_func = self.fn_update_push_constant;
-        let push_constant_object = push_constant_func(model_index, elapsed_time);
-        push_constant_object
-    }
-
-    pub(crate) fn is_allocated(&self) -> bool {
-        self.is_allocated
-    }
-
-    pub fn uniform_buffers(&self) -> &Vec<vk::Buffer> {
-       &self.uniform_buffers 
-    }
-}
-
-impl Drop for UniformBuffer {
-    fn drop(&mut self) {
-        self.clean();
-    }
 }
 
 //================================================

@@ -301,13 +301,7 @@ impl AppData {
     pub fn push_model(&mut self, model: VulkanModel) { self.models.push(model); }
     pub fn models(&self) -> &[VulkanModel] { self.models.as_ref() }
     pub fn at_model(&self, index: usize) -> &VulkanModel { &self.models[index] }
-    pub fn update_models(&mut self, image_index: usize) -> Result<()> {
-        for i in 0..self.models.len() {
-            self.models[i].update(&self.device, self.swapchain_extent, image_index)?;
-        }
-        Ok(())
-    }
-
+    pub fn at_model_mut(&mut self, index: usize) -> &mut VulkanModel { &mut self.models[index] }
 
     pub fn device(&self) -> Arc<Device> { self.device.clone() }
     pub fn instance(&self) -> &Instance { &self.instance }

@@ -5,10 +5,9 @@ use {
         sync::Arc
     },
     anyhow::{Error, anyhow},
-    crate::renderer::vertex::Vertex,
     super::{
-        texture::Texture, 
-        model::{ Model, load_model },
+        texture::Texture,
+        model::Model, 
     },
 };
 
@@ -55,14 +54,8 @@ impl Loader{
             Ok(model.clone())   //case where model is already loaded
         }
         else {      //case where we need to load a new model
-            let mut vertices = Vec::<Vertex>::new();
-            let mut indices = Vec::<u32>::new();
-            match load_model(path, &mut vertices, &mut indices) {
-                Ok(()) => (),
-                Err(e) => return Err(anyhow!(e)),
-            };
-
-            let model = Arc::new(Model::construct(vertices, indices));
+            
+            let model = Arc::new(Model::new(path)?);
             self.model_loaded.insert(path.clone(), model.clone());
             Ok(model.clone())
         }

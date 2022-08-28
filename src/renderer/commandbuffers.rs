@@ -106,7 +106,7 @@ pub unsafe fn update_command_buffer(device: &Device, data: &mut AppData,
 
 unsafe fn update_secondary_command_buffer(
     device : &Device,
-    data: &AppData,
+    data: &mut AppData,
     image_index: usize,
     model_index: usize,
     start: &Instant,
@@ -125,7 +125,12 @@ unsafe fn update_secondary_command_buffer(
 
     //push constant data
     let elapsed_time = start.elapsed().as_secs_f32();
-    let push_constant_object = model.uniform_buffer().update_push_constant(model_index, elapsed_time);
+    let push_constant_object= model.uniform_buffer().update_matrix(
+        device, 
+        data.swapchain_extent(),
+        image_index,
+        model_index, 
+        elapsed_time)?;
 
     let mat_model = push_constant_object.model();
     let view = push_constant_object.view();

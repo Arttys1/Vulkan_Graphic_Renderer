@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 mod renderer;
-use renderer::{renderer::Renderer};
+use renderer::renderer::Renderer;
+mod tools;
+mod object;
 
 use chrono::{DateTime, Local, Duration};
 use winit::{
@@ -12,7 +14,8 @@ use winit::{
 use anyhow::Result;
 use nalgebra_glm as glm;
 
-use crate::renderer::{vertex::Vertex, vertexbuffers::*, texture::*, model::*};
+use crate::{renderer::{vertex::Vertex, uniformbuffers::MatrixShaderObject}, object::{triangle::Triangle, Object, mesh::Mesh}};
+use tools::loader::Loader;
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -20,43 +23,14 @@ fn main() -> Result<()> {
     // Window
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
-        .with_title("Vulkan Tutorial (Rust)")
+        .with_title("Vulkan Renderer (Rust)")
         .with_inner_size(LogicalSize::new(800, 600))
         .build(&event_loop)?;
 
     // App
     let mut app = Renderer::create(&window)?;
-    {                        
-        let vertices : Vec::<Vertex> = vec![
-            Vertex::new(glm::vec3(-0.5, -0.5, 0.0),glm::vec3(1.0, 0.0, 0.0),glm::vec2(1.0, 0.0)),
-            Vertex::new(glm::vec3(0.5, -0.5, 0.0), glm::vec3(0.0, 1.0, 0.0), glm::vec2(0.0, 0.0)),
-            Vertex::new(glm::vec3(0.5, 0.5, 0.0), glm::vec3(0.0, 0.0, 1.0), glm::vec2(0.0, 1.0)),
-            Vertex::new(glm::vec3(-0.5, 0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
-            //
-            Vertex::new(glm::vec3(-0.5, -0.5, -0.5), glm::vec3(1.0, 0.0, 0.0), glm::vec2(1.0, 0.0)),
-            Vertex::new(glm::vec3(0.5, -0.5, -0.5), glm::vec3(0.0, 1.0, 0.0), glm::vec2(0.0, 0.0)),
-            Vertex::new(glm::vec3(0.5, 0.5, -0.5), glm::vec3(0.0, 0.0, 1.0), glm::vec2(0.0, 1.0)),
-            Vertex::new(glm::vec3(-0.5, 0.5, -0.5), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
-        ];
-        
-        let indices: Vec<u32> = vec!(
-            0, 1, 2, 2, 3, 0,
-            //
-            4, 5, 6, 6, 7, 4
-        );
+    fill_app(&mut app)?;
 
-        let buffer = VertexBuffer::allocate_(&app, vertices, indices)?;
-        let texture = Texture::new(&app, "resources/texture.png")?;
-        app.add_model(Model::construct(buffer, texture)?);
-
-        const TEXTURE_PATH: &str = "resources/viking_room.png";
-        const MODEL_PATH: &str ="resources/viking_room.obj";
-        println!("load models...");
-        app.add_model(Model::read(&app,MODEL_PATH, TEXTURE_PATH)?);
-        app.add_model(Model::read(&app,MODEL_PATH, "resources/texture.png")?);
-        app.add_model(Model::read(&app,MODEL_PATH, "resources/texture.png")?);
-        println!("models loaded.");
-    }
     let mut destroying = false;
     let mut minimized = false;
     event_loop.run(move |event, _, control_flow| {
@@ -90,4 +64,74 @@ fn main() -> Result<()> {
             _ => {}
         }
     });
+}
+
+fn fill_app(app: &mut Renderer) -> Result<()> {
+    let mut loader = Loader::default();
+    let vertices : Vec::<Vertex> = vec![
+        Vertex::new(glm::vec3(-0.5, -0.5, 0.0),glm::vec3(1.0, 0.0, 0.0),glm::vec2(1.0, 0.0)),
+        Vertex::new(glm::vec3(0.5, -0.5, 0.0), glm::vec3(0.0, 1.0, 0.0), glm::vec2(0.0, 0.0)),
+        Vertex::new(glm::vec3(0.5, 0.5, 0.0), glm::vec3(0.0, 0.0, 1.0), glm::vec2(0.0, 1.0)),
+        Vertex::new(glm::vec3(-0.5, 0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
+        //
+        Vertex::new(glm::vec3(-0.5, -0.5, -0.5), glm::vec3(1.0, 0.0, 0.0), glm::vec2(1.0, 0.0)),
+        Vertex::new(glm::vec3(0.5, -0.5, -0.5), glm::vec3(0.0, 1.0, 0.0), glm::vec2(0.0, 0.0)),
+        Vertex::new(glm::vec3(0.5, 0.5, -0.5), glm::vec3(0.0, 0.0, 1.0), glm::vec2(0.0, 1.0)),
+        Vertex::new(glm::vec3(-0.5, 0.5, -0.5), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
+    ];
+    
+    let indices: Vec<u32> = vec!(
+        0, 1, 2, 2, 3, 0,
+        //
+        4, 5, 6, 6, 7, 4
+    );
+    let f = |model_index: usize, elapsed: f32, width: u32, height: u32| -> MatrixShaderObject {
+        let y = (((model_index % 2) as f32) * 2.5) - 1.25;
+        let z = (((model_index / 2) as f32) * -2.0) + 1.0;
+
+        let model = glm::translate(
+            &glm::identity(),
+            &glm::vec3(0.0, y, z),
+        );    
+        let model = glm::rotate(
+            &model,
+            elapsed * glm::radians(&glm::vec1(90.0))[0],
+            &glm::vec3(0.0, 0.0, 1.0),
+        );
+        let view = glm::look_at(
+            &glm::vec3(6.0f32, 0.0, 2.0),
+            &glm::vec3(0.0, 0.0, 0.0),
+            &glm::vec3(0.0, 0.0, 1.0),
+        );
+        let mut proj = glm::perspective_rh_zo(
+            width as f32 / height as f32,
+            glm::radians(&glm::vec1(45.0))[0],
+            0.1,
+            10.0,
+        );        
+        proj[(1, 1)] *= -1.0;
+
+        MatrixShaderObject::construct(view, model, proj)
+
+    };
+
+    const TEXTURE_VIKING: &str = "resources/viking_room.png";
+    const TEXTURE_STATUE: &str = "resources/texture.png";
+    const MODEL_PATH: &str ="resources/viking_room.obj";
+    let texture_statue = loader.load_texture(&TEXTURE_STATUE.to_string())?;
+    let texture_viking = loader.load_texture(&TEXTURE_VIKING.to_string())?;
+    let mut triangle = Triangle::new([vertices[0], vertices[1], vertices[2]],  Some(texture_viking.clone()));
+    triangle.set_fn_update_matrix(f);
+    let model = loader.load_model(&MODEL_PATH.to_string())?;
+    let mut viking_room = Mesh::new(model.clone(), Some(texture_viking.clone()));
+    let mut statue_room = Mesh::new(model, Some(texture_statue.clone()));
+    let mut double_face = Mesh::construct(vertices, indices, Some(texture_statue));
+    double_face.set_fn_update_matrix(f);
+    viking_room.set_fn_update_matrix(f);
+    statue_room.set_fn_update_matrix(f);
+    app.add_object(&triangle)?;
+    app.add_object(&viking_room)?;
+    app.add_object(&statue_room)?;
+    app.add_object(&double_face)?;
+    Ok(())
 }
