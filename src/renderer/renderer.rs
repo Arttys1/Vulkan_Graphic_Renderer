@@ -3,19 +3,15 @@ use {
     vulkanalia::{
         loader::{ LibloadingLoader, LIBRARY },
         prelude::v1_0::*,
-        vk::{
-            KhrSwapchainExtension,
-        },
+        vk::KhrSwapchainExtension,
     },
-    nalgebra_glm as glm,
     winit::window::Window,
     anyhow::{anyhow, Result},
     crate::object::Object,
     super::{
         appdata::*,
         commandbuffers::*, 
-        vulkan_model::VulkanModel, 
-        uniformbuffers::MatrixShaderObject,
+        vulkan_model::VulkanModel,
     },
 };
 pub const MAX_FRAMES_IN_FLIGHT: usize = 2;
@@ -131,57 +127,17 @@ impl Renderer {
         Ok(())
     }
 
-    pub(crate) fn update_matrix(model_index: usize, elapsed_time: f32, swapchain_width: u32, swapchain_height: u32) -> MatrixShaderObject {
-        let y = (((model_index % 2) as f32) * 2.5) - 1.25;
-        let z = (((model_index / 2) as f32) * -2.0) + 1.0;
-
-        let model = glm::translate(
-            &glm::identity(),
-            &glm::vec3(0.0, y, z),
-        );    
-        let model = glm::rotate(
-            &model,
-            elapsed_time * glm::radians(&glm::vec1(90.0))[0],
-            &glm::vec3(0.0, 0.0, 1.0),
-        );
-        let view = glm::look_at(
-            &glm::vec3(6.0f32, 0.0, 2.0),
-            &glm::vec3(0.0, 0.0, 0.0),
-            &glm::vec3(0.0, 0.0, 1.0),
-        );
-        let mut proj = glm::perspective_rh_zo(
-            swapchain_width as f32 / swapchain_height as f32,
-            glm::radians(&glm::vec1(45.0))[0],
-            0.1,
-            10.0,
-        );        
-        proj[(1, 1)] *= -1.0;
-
-        MatrixShaderObject::construct(view, model, proj)
-    }
-
     pub fn clean(&mut self) {
         self.data.clean();
-    }
-    
-    pub fn add_model(&mut self, model: VulkanModel) {
-        self.data.push_model(model);
     }
 
     pub fn must_resize(&mut self) {
         self.resized = true;
     } 
-    
-    pub fn get_device(&self) -> Arc<Device> {
-        self.device.clone()
-    }
+}
 
-    pub fn get_instance(&self) -> &Instance {
-        &self.data.instance()
-    }
-
-    pub fn get_appdata(&self) -> &AppData {
-        &self.data
-    }
-
+impl Drop for Renderer {
+    fn drop(&mut self) {
+        self.clean();
+    }   
 }

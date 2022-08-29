@@ -1,6 +1,6 @@
 use {
     std::sync::Arc,
-    anyhow::{Result, anyhow},
+    anyhow::Result,
     vulkanalia::prelude::v1_0::*,
     super::{
         vulkan_texture::VulkanTexture,
@@ -48,19 +48,6 @@ impl VulkanModel {
         })
     }
 
-    pub fn construct(buffer: VertexBuffer, texture: VulkanTexture, uniform_buffer: UniformBuffer, descriptor: Descriptor)
--> Result<Self> {
-        if !(buffer.is_allocated() && texture.is_allocated() && uniform_buffer.is_allocated() && descriptor.is_allocated()) {
-            return Err(anyhow!("vertex_buffer, texture and uniform_buffer must be allocated before"));
-        }
-        Ok(VulkanModel {
-            texture,
-            buffer,
-            uniform_buffer,
-            descriptor,
-        })
-    }
-
     pub fn clean(&mut self) {
         self.texture.clean();
         self.buffer.clean();
@@ -79,24 +66,10 @@ impl VulkanModel {
         Ok(())
     }
 
-    pub fn texture(&self) -> &VulkanTexture {
-        &self.texture
-    }
-
-    pub fn buffer(&self) -> &VertexBuffer {
-        &self.buffer
-    }
-
-    pub fn descriptor(&self) -> &Descriptor {
-        &self.descriptor
-    }
-
-    pub fn uniform_buffer(&self) -> &UniformBuffer {
-        &self.uniform_buffer
-    }
-    pub fn uniform_buffer_mut(&mut self) -> &mut UniformBuffer {
-        &mut self.uniform_buffer
-    }
+    pub fn texture(&self) -> &VulkanTexture { &self.texture }
+    pub fn buffer(&self) -> &VertexBuffer { &self.buffer }
+    pub fn descriptor(&self) -> &Descriptor { &self.descriptor }
+    pub fn uniform_buffer(&self) -> &UniformBuffer { &self.uniform_buffer }
 }
 
 impl Drop for VulkanModel {

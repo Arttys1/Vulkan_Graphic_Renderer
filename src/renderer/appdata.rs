@@ -190,7 +190,6 @@ impl AppData {
                 self.image_available_semaphores.iter()
                     .for_each(|s| self.device.destroy_semaphore(*s, None));
 
-
                 self.device.destroy_command_pool(self.command_pool, None);                
                 self.device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
                 self.device.destroy_device(None);
@@ -301,86 +300,31 @@ impl AppData {
     pub fn push_model(&mut self, model: VulkanModel) { self.models.push(model); }
     pub fn models(&self) -> &[VulkanModel] { self.models.as_ref() }
     pub fn at_model(&self, index: usize) -> &VulkanModel { &self.models[index] }
-    pub fn at_model_mut(&mut self, index: usize) -> &mut VulkanModel { &mut self.models[index] }
 
+    //getters
     pub fn device(&self) -> Arc<Device> { self.device.clone() }
     pub fn instance(&self) -> &Instance { &self.instance }
     pub fn swapchain_extent(&self) -> vk::Extent2D { self.swapchain_extent }
-    pub fn render_pass(&self) -> vk::RenderPass {
-        self.render_pass
-    }
-
-    pub fn pipeline_layout(&self) -> vk::PipelineLayout {
-        self.pipeline_layout
-    }
-
-    pub fn command_pools(&self) -> &[vk::CommandPool] {
-        self.command_pools.as_ref()
-    }
-
-    pub fn command_buffers(&self) -> &[vk::CommandBuffer] {
-        self.command_buffers.as_ref()
-    }
-
-    pub fn pipeline(&self) -> vk::Pipeline {
-        self.pipeline
-    }
-
-    pub fn framebuffers(&self) -> &[vk::Framebuffer] {
-        self.framebuffers.as_ref()
-    }
-
-    pub fn graphics_queue(&self) -> vk::Queue {
-        self.graphics_queue
-    }
-
-    pub fn swapchain(&self) -> vk::SwapchainKHR {
-        self.swapchain
-    }
-
-    pub fn image_available_semaphores(&self) -> &[vk::Semaphore] {
-        self.image_available_semaphores.as_ref()
-    }
-
-    pub fn render_finished_semaphores(&self) -> &[vk::Semaphore] {
-        self.render_finished_semaphores.as_ref()
-    }
-
-    pub fn in_flight_fences(&self) -> &[vk::Fence] {
-        self.in_flight_fences.as_ref()
-    }
-
-    pub fn images_in_flight(&self) -> &[vk::Fence] {
-        self.images_in_flight.as_ref()
-    }
-
-    pub fn present_queue(&self) -> vk::Queue {
-        self.present_queue
-    }
-
-    pub fn physical_device(&self) -> vk::PhysicalDevice {
-        self.physical_device
-    }
-
-    pub fn command_pool(&self) -> vk::CommandPool {
-        self.command_pool
-    }
-
-    pub fn swapchain_images(&self) -> &Vec<vk::Image> {
-        &self.swapchain_images
-    }
-
-    pub fn descriptor_set_layout(&self) -> vk::DescriptorSetLayout {
-        self.descriptor_set_layout
-    }
-
-    pub fn images_in_flight_mut(&mut self) -> &mut Vec<vk::Fence> {
-        &mut self.images_in_flight
-    }
-
-    pub fn command_buffers_mut(&mut self) -> &mut Vec<vk::CommandBuffer> {
-        &mut self.command_buffers
-    }
+    pub fn render_pass(&self) -> vk::RenderPass { self.render_pass } 
+    pub fn pipeline_layout(&self) -> vk::PipelineLayout { self.pipeline_layout } 
+    pub fn command_pools(&self) -> &[vk::CommandPool] { self.command_pools.as_ref() }
+    pub fn command_buffers(&self) -> &[vk::CommandBuffer] { self.command_buffers.as_ref() }
+    pub fn pipeline(&self) -> vk::Pipeline { self.pipeline }
+    pub fn framebuffers(&self) -> &[vk::Framebuffer] { self.framebuffers.as_ref() }
+    pub fn graphics_queue(&self) -> vk::Queue { self.graphics_queue }
+    pub fn swapchain(&self) -> vk::SwapchainKHR { self.swapchain }
+    pub fn image_available_semaphores(&self) -> &[vk::Semaphore] { self.image_available_semaphores.as_ref() }
+    pub fn render_finished_semaphores(&self) -> &[vk::Semaphore] { self.render_finished_semaphores.as_ref() }
+    pub fn in_flight_fences(&self) -> &[vk::Fence] { self.in_flight_fences.as_ref() }
+    pub fn images_in_flight(&self) -> &[vk::Fence] { self.images_in_flight.as_ref() }
+    pub fn present_queue(&self) -> vk::Queue { self.present_queue } 
+    pub fn physical_device(&self) -> vk::PhysicalDevice { self.physical_device }
+    pub fn command_pool(&self) -> vk::CommandPool { self.command_pool }
+    pub fn swapchain_images(&self) -> &Vec<vk::Image> { &self.swapchain_images }
+    pub fn descriptor_set_layout(&self) -> vk::DescriptorSetLayout { self.descriptor_set_layout }
+    pub fn images_in_flight_mut(&mut self) -> &mut Vec<vk::Fence> { &mut self.images_in_flight }
+    pub fn command_buffers_mut(&mut self) -> &mut Vec<vk::CommandBuffer> { &mut self.command_buffers }
+    
 }
 
 impl Drop for AppData {
