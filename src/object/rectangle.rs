@@ -10,14 +10,14 @@ use {
     nalgebra_glm as glm,
 };
 
-pub struct Triangle{
-    vertices: [Vertex; 3],
+pub struct Rectangle {
+    vertices: [Vertex; 4],
     texture: Option<Arc<Texture>>,
     fn_update_matrix : Option<fn(usize, f32, u32, u32) -> MatrixShaderObject>,
 }
 
-impl Triangle {
-    pub fn new(vertices: [Vertex; 3], texture: Option<Arc<Texture>>) -> Self {
+impl Rectangle {
+    pub fn new(vertices: [Vertex; 4], texture: Option<Arc<Texture>>) -> Self {
         Self { vertices, texture, fn_update_matrix: None } 
     }
     pub fn from_one(mut one: Vertex, width: f32, height: f32, texture: Option<Arc<Texture>>) -> Self {
@@ -32,22 +32,27 @@ impl Triangle {
             one.color(),
             glm::Vec2::new(0.0, 1.0),
         );
+        let four = Vertex::new(
+            one.pos() + glm::Vec3::new(width, height, 0.0),
+            one.color(),
+            glm::Vec2::new(1.0, 1.0),
+        );
         Self {
-            vertices: [one, two, three],
+            vertices: [one, two, three, four],
             texture,
             fn_update_matrix: None,
         }
-    }    
+    }  
 }
 
-impl Object for Triangle {
+impl Object for Rectangle {
     fn vertices(&self) -> &[Vertex] {
         self.vertices.as_ref()
     }
 
     fn indices (&self) -> &[u32] {
-        &[0, 1, 2, // one face
-          2, 1, 0] //behind
+        &[0, 1, 2, 2, 3, 0, 	//one face 
+          2, 1, 0, 0, 3, 2 ]    //behind
     }
 
     fn texture (&self) -> Option<Arc<Texture>> {

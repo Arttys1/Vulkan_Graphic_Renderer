@@ -36,6 +36,10 @@ impl Object for Mesh {
         self.texture.clone()
     }
 
+    fn set_texture(&mut self, texture: Arc<Texture>) {
+        self.texture = Some(texture);
+    }
+
     fn set_fn_update_matrix(&mut self, f: fn(usize, f32, u32, u32) -> MatrixShaderObject) {
         self.fn_update_matrix = Some(f);
     }

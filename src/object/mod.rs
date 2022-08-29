@@ -1,5 +1,7 @@
-pub mod triangle;
 pub mod mesh;
+pub mod triangle;
+pub mod rectangle;
+pub mod cube;
 use std::sync::Arc;
 
 use crate::{
@@ -11,6 +13,7 @@ pub trait Object {
     fn vertices(&self) -> &[Vertex];
     fn indices (&self) -> &[u32];
     fn texture (&self) -> Option<Arc<Texture>>;
+    fn set_texture(&mut self, texture: Arc<Texture>);
     fn set_fn_update_matrix(&mut self, f: fn(usize, f32, u32, u32) -> MatrixShaderObject);
     fn get_fn_update_matrix(&self) -> Option<fn(usize, f32, u32, u32) -> MatrixShaderObject>;
 }

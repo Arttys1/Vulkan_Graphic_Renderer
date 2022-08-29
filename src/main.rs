@@ -14,7 +14,7 @@ use winit::{
 use anyhow::Result;
 use nalgebra_glm as glm;
 
-use crate::{renderer::{vertex::Vertex, uniformbuffers::MatrixShaderObject}, object::{triangle::Triangle, Object, mesh::Mesh}};
+use crate::{renderer::{vertex::Vertex, uniformbuffers::MatrixShaderObject}, object::{triangle::Triangle, Object, mesh::Mesh, rectangle::Rectangle, cube::Cube}};
 use tools::loader::Loader;
 
 fn main() -> Result<()> {
@@ -59,7 +59,6 @@ fn main() -> Result<()> {
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                 destroying = true;
                 *control_flow = ControlFlow::Exit;
-                app.clean();
             }
             _ => {}
         }
@@ -69,7 +68,7 @@ fn main() -> Result<()> {
 fn fill_app(app: &mut Renderer) -> Result<()> {
     let mut loader = Loader::default();
     let vertices : Vec::<Vertex> = vec![
-        Vertex::new(glm::vec3(-0.5, -0.5, 0.0),glm::vec3(1.0, 0.0, 0.0),glm::vec2(1.0, 0.0)),
+        Vertex::new(glm::vec3(-0.5, -0.5, 0.0),glm::vec3(1.0, 1.0, 1.0),glm::vec2(1.0, 0.0)),
         Vertex::new(glm::vec3(0.5, -0.5, 0.0), glm::vec3(0.0, 1.0, 0.0), glm::vec2(0.0, 0.0)),
         Vertex::new(glm::vec3(0.5, 0.5, 0.0), glm::vec3(0.0, 0.0, 1.0), glm::vec2(0.0, 1.0)),
         Vertex::new(glm::vec3(-0.5, 0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
@@ -120,16 +119,19 @@ fn fill_app(app: &mut Renderer) -> Result<()> {
     const MODEL_PATH: &str ="resources/viking_room.obj";
     let texture_statue = loader.load_texture(&TEXTURE_STATUE.to_string())?;
     let texture_viking = loader.load_texture(&TEXTURE_VIKING.to_string())?;
-    let mut triangle = Triangle::new([vertices[0], vertices[1], vertices[2]],  Some(texture_viking.clone()));
+    let mut triangle = Rectangle::new([vertices[0], vertices[1], vertices[2], vertices[3]],  Some(texture_viking.clone()));
     triangle.set_fn_update_matrix(f);
     let model = loader.load_model(&MODEL_PATH.to_string())?;
     let mut viking_room = Mesh::new(model.clone(), Some(texture_viking.clone()));
     let mut statue_room = Mesh::new(model, Some(texture_statue.clone()));
+    let mut cube = Cube::from_one(vertices[0], 1.0, 1.0, 1.0, Some(texture_statue.clone()));
     let mut double_face = Mesh::construct(vertices, indices, Some(texture_statue));
+    cube.set_fn_update_matrix(f);
     double_face.set_fn_update_matrix(f);
     viking_room.set_fn_update_matrix(f);
     statue_room.set_fn_update_matrix(f);
     app.add_object(&triangle)?;
+    app.add_object(&cube)?;
     app.add_object(&viking_room)?;
     app.add_object(&statue_room)?;
     app.add_object(&double_face)?;

@@ -10,7 +10,6 @@ use {
         model::Model, 
     },
 };
-
 pub struct Loader {
     texture_loaded: HashMap<String, Arc<Texture>>,
     model_loaded: HashMap<String, Arc<Model>>,
