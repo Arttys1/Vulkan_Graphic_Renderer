@@ -2,7 +2,9 @@ pub mod mesh;
 pub mod triangle;
 pub mod rectangle;
 pub mod cube;
-use std::sync::Arc;
+pub mod circle;
+pub mod sphere;
+use std::{sync::Arc, collections::HashMap};
 
 use crate::{
     renderer::{vertex::Vertex, uniformbuffers::MatrixShaderObject},
@@ -17,3 +19,15 @@ pub trait Object {
     fn set_fn_update_matrix(&mut self, f: fn(usize, f32, u32, u32) -> MatrixShaderObject);
     fn get_fn_update_matrix(&self) -> Option<fn(usize, f32, u32, u32) -> MatrixShaderObject>;
 }
+
+pub(crate) fn add_unique_vertex(hashmap: &mut HashMap<Vertex, u32>, 
+    vertices: &mut Vec<Vertex>,
+    indices : &mut Vec<u32>,
+    vertex :Vertex) {
+        if !hashmap.contains_key(&vertex) {
+            hashmap.insert(vertex, vertices.len() as u32);
+			vertices.push(vertex);
+		}
+
+		indices.push(hashmap[&vertex]);
+    }
