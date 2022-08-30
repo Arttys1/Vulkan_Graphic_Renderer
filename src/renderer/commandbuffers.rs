@@ -92,11 +92,12 @@ pub unsafe fn update_command_buffer(device: &Device, data: &mut AppData,
 
     device.cmd_begin_render_pass(command_buffer, &info, vk::SubpassContents::SECONDARY_COMMAND_BUFFERS);
 
-    let secondary_command_buffers = (0..data.models().len())
-        .map(|i| update_secondary_command_buffer(device, data, image_index, i, start))
-        .collect::<Result<Vec<_>, _>>()?;
-    device.cmd_execute_commands(command_buffer, &secondary_command_buffers[..]);
-
+    if !data.models().is_empty() {
+        let secondary_command_buffers = (0..data.models().len())
+            .map(|i| update_secondary_command_buffer(device, data, image_index, i, start))
+            .collect::<Result<Vec<_>, _>>()?;
+        device.cmd_execute_commands(command_buffer, &secondary_command_buffers[..]);
+    }
     device.cmd_end_render_pass(command_buffer);
 
     device.end_command_buffer(command_buffer)?;
