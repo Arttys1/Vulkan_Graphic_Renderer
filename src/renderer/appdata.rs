@@ -11,7 +11,7 @@ use {
         queue_family::{pick_physical_device, create_logical_device},
         swapchain::{create_swapchain, create_swapchain_image_views}, 
         pipeline::{create_render_pass, create_pipeline}, 
-        descriptor::create_descriptor_set_layout, 
+        descriptor::descriptor_set_layout_textured, 
         commandbuffers::create_command_pools, 
         image::create_color_objects, 
         depthbuffers::create_depth_objects, 
@@ -94,7 +94,7 @@ impl AppData {
             let swapchain_image_views = create_swapchain_image_views(&device, &swapchain_images, swapchain_format)?;
 
             let render_pass = create_render_pass(&instance, &device, physical_device, swapchain_format, msaa_samples)?;
-            let descriptor_set_layout = create_descriptor_set_layout(&device)?;
+            let descriptor_set_layout = descriptor_set_layout_textured(&device)?;
                     
             let ( pipeline, 
                 pipeline_layout

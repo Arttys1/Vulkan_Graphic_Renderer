@@ -1,3 +1,5 @@
+use super::vulkan_shader::ShaderType;
+
 use {
     std::{
         mem::size_of,
@@ -100,7 +102,16 @@ impl Drop for Descriptor {
 // descriptor set layout
 //================================================
 
-pub unsafe fn create_descriptor_set_layout(device: &Device) -> Result<vk::DescriptorSetLayout> {
+pub fn create_descriptor_set_layout(device: &Device, shader_type: ShaderType)  -> Result<vk::DescriptorSetLayout> {
+    unsafe {
+        match shader_type {
+            ShaderType::Textured => descriptor_set_layout_textured(device),
+            ShaderType::Untextured => descriptor_set_layout_untextured(device),
+        }
+    }
+}
+
+pub unsafe fn descriptor_set_layout_textured(device: &Device) -> Result<vk::DescriptorSetLayout> {
     let ubo_binding = vk::DescriptorSetLayoutBinding::builder()
         .binding(0)
         .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
@@ -114,6 +125,21 @@ pub unsafe fn create_descriptor_set_layout(device: &Device) -> Result<vk::Descri
         .stage_flags(vk::ShaderStageFlags::FRAGMENT);
 
     let bindings = &[ubo_binding, sampler_binding];
+    let info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(bindings);
+
+    let descriptor_set_layout = device.create_descriptor_set_layout(&info, None)?;
+
+    Ok(descriptor_set_layout)
+}
+
+pub unsafe fn descriptor_set_layout_untextured(device: &Device) -> Result<vk::DescriptorSetLayout> {
+    let ubo_binding = vk::DescriptorSetLayoutBinding::builder()
+        .binding(0)
+        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+        .descriptor_count(1)
+        .stage_flags(vk::ShaderStageFlags::VERTEX);
+
+    let bindings = &[ubo_binding];
     let info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(bindings);
 
     let descriptor_set_layout = device.create_descriptor_set_layout(&info, None)?;

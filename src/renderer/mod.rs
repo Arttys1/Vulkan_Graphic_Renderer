@@ -16,3 +16,4 @@ mod pipeline;
 mod framebuffers;
 mod commandbuffers;
 mod sync;
+mod vulkan_shader;
