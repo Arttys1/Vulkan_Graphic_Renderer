@@ -1,3 +1,5 @@
+use super::loader::Loadable;
+
 use {
     std::{io::BufReader, fs::File, collections::HashMap},
     crate::{renderer::{vertex::Vertex}},
@@ -30,6 +32,12 @@ impl Model {
 
     pub fn indices(&self) -> &[u32] {
         self.indices.as_ref()
+    }
+}
+
+impl Loadable for Model {
+    fn load(path: &String) -> Result<Self, anyhow::Error> {
+        Model::new(path)
     }
 }
 
