@@ -4,7 +4,7 @@ pub mod vertexbuffers;
 pub mod vulkan_model;
 pub mod uniformbuffers;
 pub mod vertex;
-mod appdata;
+mod core;
 mod instance;
 mod descriptor;
 mod image;

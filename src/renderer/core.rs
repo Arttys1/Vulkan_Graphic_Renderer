@@ -23,7 +23,7 @@ use {
 };
 /// The Vulkan handles and associated properties used by our Vulkan app.
 #[derive(Clone, Debug)]
-pub struct AppData {
+pub struct Core {
     instance: Instance,
     device: Arc<Device>,
     surface: vk::SurfaceKHR,
@@ -74,7 +74,7 @@ pub struct AppData {
     is_allocated: bool,
 }
 
-impl AppData {
+impl Core {
     pub fn new(window: &Window, entry: &Entry) -> Result<Self> {
         unsafe {
             let (instance, messenger) = create_instance(window, entry)?;
@@ -126,7 +126,7 @@ impl AppData {
                 images_in_flight,
                 ) = create_sync_objects(&device, &swapchain_images)?;
 
-            Ok(AppData {
+            Ok(Core {
                 instance,
                 device,
                 surface,
@@ -169,7 +169,7 @@ impl AppData {
         if self.is_allocated {
             unsafe {
                 //wait for device to be idle before destroying resources
-                self.device.device_wait_idle().unwrap();    
+                self.device.device_wait_idle().ok();    
 
                 //swapchain
                 self.destroy_swapchain();
@@ -327,7 +327,7 @@ impl AppData {
     
 }
 
-impl Drop for AppData {
+impl Drop for Core {
     fn drop(&mut self) {
         self.clean();
     }
