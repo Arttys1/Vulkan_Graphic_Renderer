@@ -6,19 +6,46 @@ use vulkanalia::prelude::v1_0::*;
 
 use anyhow::{Result, anyhow};
 
+use super::vulkan_shader::ShaderType;
+
 //================================================
 // Pipeline
 //================================================
 
+pub fn create_pipeline_type(device: &Device,
+    shader_type: ShaderType,
+    swapchain_extent: vk::Extent2D,
+    msaa_samples: vk::SampleCountFlags,
+    descriptor_set_layout: vk::DescriptorSetLayout,
+    render_pass: vk::RenderPass) -> Result<(vk::Pipeline, vk::PipelineLayout)> 
+{
+    match shader_type {
+        ShaderType::Textured =>{
+            let vert = include_bytes!("../../shaders/texture_vert.spv");
+            let frag = include_bytes!("../../shaders/texture_frag.spv");
+            unsafe {
+                create_pipeline(device, vert, frag, swapchain_extent, msaa_samples, descriptor_set_layout, render_pass)
+            }
+        },
+        ShaderType::Untextured => {
+            let vert = include_bytes!("../../shaders/only_color_vert.spv");
+            let frag = include_bytes!("../../shaders/only_color_frag.spv");
+            unsafe {
+                create_pipeline(device, vert, frag, swapchain_extent, msaa_samples, descriptor_set_layout, render_pass)
+            }
+        },
+    }
+}
+
 pub unsafe fn create_pipeline(
     device: &Device, 
+    vert: &[u8],
+    frag: &[u8],
     swapchain_extent: vk::Extent2D,
     msaa_samples: vk::SampleCountFlags,
     descriptor_set_layout: vk::DescriptorSetLayout,
     render_pass: vk::RenderPass)
 -> Result<(vk::Pipeline, vk::PipelineLayout)> {
-    let vert = include_bytes!("../../shaders/vert.spv");
-    let frag = include_bytes!("../../shaders/frag.spv");
     
     let vert_shader_module = create_shader_module(device, &vert[..])?;
     let frag_shader_module = create_shader_module(device, &frag[..])?;

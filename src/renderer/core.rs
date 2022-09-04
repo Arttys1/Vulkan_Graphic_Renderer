@@ -4,25 +4,29 @@ use {
         window as vk_window,
         vk::{KhrSwapchainExtension, KhrSurfaceExtension, ExtDebugUtilsExtension},
     },
-    std::sync::Arc,
+    std::{
+        sync::Arc,
+        cell::RefCell,
+    },
     winit::window::Window,
     super::{
         instance::{create_instance, VALIDATION_ENABLED},
         queue_family::{pick_physical_device, create_logical_device},
         swapchain::{create_swapchain, create_swapchain_image_views}, 
-        pipeline::{create_render_pass, create_pipeline}, 
-        descriptor::descriptor_set_layout_textured, 
+        pipeline::create_render_pass, 
         commandbuffers::create_command_pools, 
         image::create_color_objects, 
         depthbuffers::create_depth_objects, 
         framebuffers::create_framebuffers, 
         sync::create_sync_objects,
         vulkan_model::VulkanModel,
+        vulkan_shader::ShaderContainer,
     },
-    anyhow::Result,
+    crate::object::Object,
+    anyhow::{Result},
 };
 /// The Vulkan handles and associated properties used by our Vulkan app.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Core {
     instance: Instance,
     device: Arc<Device>,
@@ -43,10 +47,7 @@ pub struct Core {
     swapchain_image_views: Vec<vk::ImageView>,
 
 //pipeline
-    pipeline: vk::Pipeline,
     render_pass: vk::RenderPass,
-    descriptor_set_layout: vk::DescriptorSetLayout,
-    pipeline_layout: vk::PipelineLayout,
     
 //framebuffers
     framebuffers: Vec<vk::Framebuffer>,
@@ -71,6 +72,7 @@ pub struct Core {
     color_image_view: vk::ImageView,
 
     models: Vec<VulkanModel>,
+    shaders: Arc<RefCell<ShaderContainer>>,
     is_allocated: bool,
 }
 
@@ -94,12 +96,7 @@ impl Core {
             let swapchain_image_views = create_swapchain_image_views(&device, &swapchain_images, swapchain_format)?;
 
             let render_pass = create_render_pass(&instance, &device, physical_device, swapchain_format, msaa_samples)?;
-            let descriptor_set_layout = descriptor_set_layout_textured(&device)?;
                     
-            let ( pipeline, 
-                pipeline_layout
-            ) = create_pipeline(&device, swapchain_extent, msaa_samples, descriptor_set_layout, render_pass)?;
-            
             let (command_pool,
                 command_pools
             ) = create_command_pools(&instance, &device, &swapchain_images, surface, physical_device)?;
@@ -126,9 +123,9 @@ impl Core {
                 images_in_flight,
                 ) = create_sync_objects(&device, &swapchain_images)?;
 
-            Ok(Core {
+            let core = Core {
                 instance,
-                device,
+                device: device.clone(),
                 surface,
                 messenger,
                 msaa_samples,
@@ -140,10 +137,7 @@ impl Core {
                 swapchain_extent,
                 swapchain_images,
                 swapchain_image_views,
-                pipeline,
                 render_pass,
-                descriptor_set_layout,
-                pipeline_layout,
                 framebuffers,
                 command_pool,
                 command_buffers,
@@ -159,8 +153,11 @@ impl Core {
                 color_image_memory,
                 color_image_view,
                 models: vec![],
+                shaders: Arc::new(RefCell::new(ShaderContainer::new(device.clone()))),
                 is_allocated: true,
-            })
+            };
+
+            Ok(core)
         }        
     }
 
@@ -178,6 +175,9 @@ impl Core {
                     let model = &mut self.models[i];
                     model.clean();
                 }
+                if let Some(shaders) = self.shaders.as_ptr().as_mut() {
+                    shaders.clean();
+                }
 
                 self.command_pools.iter()
                     .for_each(|p| self.device.destroy_command_pool(*p, None));
@@ -191,7 +191,6 @@ impl Core {
                     .for_each(|s| self.device.destroy_semaphore(*s, None));
 
                 self.device.destroy_command_pool(self.command_pool, None);                
-                self.device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
                 self.device.destroy_device(None);
                 self.instance.destroy_surface_khr(self.surface, None);
 
@@ -221,8 +220,6 @@ impl Core {
             .for_each(|f| self.device.destroy_framebuffer(*f, None));
 
         //pipeline
-        self.device.destroy_pipeline(self.pipeline, None);
-        self.device.destroy_pipeline_layout(self.pipeline_layout, None);
         self.device.destroy_render_pass(self.render_pass, None);
 
         //swapchain
@@ -250,10 +247,6 @@ impl Core {
 
         let render_pass = create_render_pass(&instance, &device, *physical_device, swapchain_format, *msaa_samples)?;
                 
-        let ( pipeline, 
-            pipeline_layout
-        ) = create_pipeline(&device, swapchain_extent, *msaa_samples, self.descriptor_set_layout, render_pass)?;
-
         let (color_image, 
             color_image_memory, 
             color_image_view,
@@ -273,9 +266,7 @@ impl Core {
         self.swapchain_extent = swapchain_extent;
         self.swapchain_images = swapchain_images;
         self.swapchain_image_views = swapchain_image_views;
-        self.pipeline = pipeline;
         self.render_pass = render_pass;
-        self.pipeline_layout = pipeline_layout;
         self.framebuffers = framebuffers;
         self.color_image = color_image;
         self.color_image_memory = color_image_memory;
@@ -285,14 +276,18 @@ impl Core {
         self.depth_image_view = depth_image_view;
         self.command_buffers = vec![vk::CommandBuffer::null(); self.framebuffers.len()];
 
+        if let Some(shaders) = self.shaders.as_ptr().as_mut() {
+            shaders.reload_swapchain(self.swapchain_extent, self.msaa_samples, self.render_pass)?;
+        }
+
         for i in 0..self.models.len() {
             let model = &mut self.models[i];
             model.reload_swapchain(
                 &self.instance,
                 self.physical_device,
-                &self.swapchain_images, 
-                self.descriptor_set_layout)?;
+                &self.swapchain_images)?;
         }
+
 
         Ok(())
     }
@@ -306,10 +301,8 @@ impl Core {
     pub fn instance(&self) -> &Instance { &self.instance }
     pub fn swapchain_extent(&self) -> vk::Extent2D { self.swapchain_extent }
     pub fn render_pass(&self) -> vk::RenderPass { self.render_pass } 
-    pub fn pipeline_layout(&self) -> vk::PipelineLayout { self.pipeline_layout } 
     pub fn command_pools(&self) -> &[vk::CommandPool] { self.command_pools.as_ref() }
     pub fn command_buffers(&self) -> &[vk::CommandBuffer] { self.command_buffers.as_ref() }
-    pub fn pipeline(&self) -> vk::Pipeline { self.pipeline }
     pub fn framebuffers(&self) -> &[vk::Framebuffer] { self.framebuffers.as_ref() }
     pub fn graphics_queue(&self) -> vk::Queue { self.graphics_queue }
     pub fn swapchain(&self) -> vk::SwapchainKHR { self.swapchain }
@@ -321,10 +314,28 @@ impl Core {
     pub fn physical_device(&self) -> vk::PhysicalDevice { self.physical_device }
     pub fn command_pool(&self) -> vk::CommandPool { self.command_pool }
     pub fn swapchain_images(&self) -> &Vec<vk::Image> { &self.swapchain_images }
-    pub fn descriptor_set_layout(&self) -> vk::DescriptorSetLayout { self.descriptor_set_layout }
     pub fn images_in_flight_mut(&mut self) -> &mut Vec<vk::Fence> { &mut self.images_in_flight }
     pub fn command_buffers_mut(&mut self) -> &mut Vec<vk::CommandBuffer> { &mut self.command_buffers }
-    
+    pub fn msaa_samples(&self) -> vk::SampleCountFlags { self.msaa_samples }
+
+    pub(crate) unsafe fn add_object(&mut self, obj: &dyn Object) -> Result<()> {
+        if let Some(shaders) = self.shaders.as_ptr().as_mut() {
+            let model = VulkanModel::from_obj(
+                self.device(),
+                shaders,
+                self.instance(),
+                self.physical_device(),
+                self.command_pool(),
+                self.graphics_queue(),
+                self.swapchain_images(),
+                self.swapchain_extent(),
+                self.msaa_samples(),
+                self.render_pass(),
+                obj)?;
+            self.push_model(model);
+        }
+        Ok(())
+    }
 }
 
 impl Drop for Core {

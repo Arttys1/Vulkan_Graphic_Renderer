@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub mod renderer;
 pub mod vulkan_texture;
 pub mod vertexbuffers;

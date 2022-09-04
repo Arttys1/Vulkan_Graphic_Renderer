@@ -7,15 +7,15 @@ mod object;
 use chrono::{DateTime, Local, Duration};
 use winit::{
     dpi::LogicalSize,
-    event::{Event, WindowEvent},
+    event::{Event, WindowEvent, ElementState, VirtualKeyCode},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder
 };
 use anyhow::Result;
 use nalgebra_glm as glm;
 
-use crate::{renderer::{vertex::Vertex, uniformbuffers::MatrixShaderObject}, object::{triangle::Triangle, Object, mesh::Mesh, rectangle::Rectangle, cube::Cube}};
-use tools::loader::Loader;
+use crate::{renderer::{vertex::Vertex, uniformbuffers::MatrixShaderObject}, object::{Object, mesh::Mesh, rectangle::{Rectangle}, cube::Cube}};
+use tools::{loader::Loader, texture::Texture, model::Model};
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -28,8 +28,10 @@ fn main() -> Result<()> {
         .build(&event_loop)?;
 
     // App
+    let mut texture_loader = Loader::<Texture>::default();
+    let mut model_loader = Loader::<Model>::default();
     let mut app = Renderer::create(&window)?;
-    fill_app(&mut app)?;
+    fill_app(&mut app, &mut texture_loader, &mut model_loader)?;
 
     let mut destroying = false;
     let mut minimized = false;
@@ -54,6 +56,20 @@ fn main() -> Result<()> {
                     minimized = false;
                     app.must_resize();
                 }
+            }            
+            // Handle keyboard events.
+            Event::WindowEvent { event: WindowEvent::KeyboardInput { input, .. }, .. } => {
+                if input.state == ElementState::Pressed {
+                    match input.virtual_keycode {
+                        Some(VirtualKeyCode::A) => {
+                            let mut t = object::rectangle();
+                            let texture = texture_loader.load(&"resources/texture.png".to_string()).expect("error loading texture");
+                            t.set_texture(texture);
+                            app.add_object(&t).expect("unable to add object");
+                        },
+                        _ => { }
+                    }
+                }
             }
             // Destroy our Vulkan app.
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
@@ -65,10 +81,9 @@ fn main() -> Result<()> {
     });
 }
 
-fn fill_app(app: &mut Renderer) -> Result<()> {
-    let mut loader = Loader::default();
+fn fill_app(app: &mut Renderer, t_loader: &mut Loader<Texture>, m_loader: &mut Loader<Model>) -> Result<()> {
     let vertices : Vec::<Vertex> = vec![
-        Vertex::new(glm::vec3(-0.5, -0.5, 0.0),glm::vec3(1.0, 1.0, 1.0),glm::vec2(1.0, 0.0)),
+        Vertex::new(glm::vec3(0.0, 0.0, 0.0),glm::vec3(1.0, 1.0, 1.0),glm::vec2(1.0, 0.0)),
         Vertex::new(glm::vec3(0.5, -0.5, 0.0), glm::vec3(0.0, 1.0, 0.0), glm::vec2(0.0, 0.0)),
         Vertex::new(glm::vec3(0.5, 0.5, 0.0), glm::vec3(0.0, 0.0, 1.0), glm::vec2(0.0, 1.0)),
         Vertex::new(glm::vec3(-0.5, 0.5, 0.0), glm::vec3(1.0, 1.0, 1.0), glm::vec2(1.0, 1.0)),
@@ -117,15 +132,16 @@ fn fill_app(app: &mut Renderer) -> Result<()> {
     const TEXTURE_VIKING: &str = "resources/viking_room.png";
     const TEXTURE_STATUE: &str = "resources/texture.png";
     const MODEL_PATH: &str ="resources/viking_room.obj";
-    let texture_statue = loader.load_texture(&TEXTURE_STATUE.to_string())?;
-    let texture_viking = loader.load_texture(&TEXTURE_VIKING.to_string())?;
-    let mut triangle = Rectangle::new([vertices[0], vertices[1], vertices[2], vertices[3]],  Some(texture_viking.clone()));
+    let texture_statue = t_loader.load(&TEXTURE_STATUE.to_string())?;
+    let texture_viking = t_loader.load(&TEXTURE_VIKING.to_string())?;
+    let mut triangle = Rectangle::from_one(vertices[0], 1.0, 1.0,  Some(texture_viking.clone()));
     triangle.set_fn_update_matrix(f);
-    let model = loader.load_model(&MODEL_PATH.to_string())?;
+    let model = m_loader.load(&MODEL_PATH.to_string())?;
     let mut viking_room = Mesh::new(model.clone(), Some(texture_viking.clone()));
     let mut statue_room = Mesh::new(model, Some(texture_statue.clone()));
-    let mut cube = Cube::from_one(vertices[0], 1.0, 1.0, 1.0, Some(texture_statue.clone()));
-    let mut double_face = Mesh::construct(vertices, indices, Some(texture_statue));
+    let one = Vertex::new(glm::vec3(-0.5, -0.5, 0.0),glm::vec3(1.0, 0.0, 0.0),glm::vec2(1.0, 0.0));
+    let mut cube = Cube::from_one(one, 1.0, 1.0, 1.0, None);
+    let mut double_face = Mesh::construct(vertices, indices, None);
     cube.set_fn_update_matrix(f);
     double_face.set_fn_update_matrix(f);
     viking_room.set_fn_update_matrix(f);

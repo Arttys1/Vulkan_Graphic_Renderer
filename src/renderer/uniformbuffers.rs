@@ -87,10 +87,6 @@ impl UniformBuffer {
         Ok(pcs)
     }
 
-    pub(crate) fn is_allocated(&self) -> bool {
-        self.is_allocated
-    }
-
     pub fn uniform_buffers(&self) -> &Vec<vk::Buffer> {
        &self.uniform_buffers 
     }

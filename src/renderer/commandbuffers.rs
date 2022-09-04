@@ -123,6 +123,8 @@ unsafe fn update_secondary_command_buffer(
     let model = core.at_model(model_index);
     let descriptor = &model.descriptor().descriptor_sets()[image_index];
     let model_buffer = model.buffer();
+    let shader_ptr = model.shader();
+    let shader = shader_ptr.borrow();
 
     //push constant data
     let elapsed_time = start.elapsed().as_secs_f32();
@@ -153,21 +155,21 @@ unsafe fn update_secondary_command_buffer(
     
     device.begin_command_buffer(command_buffer, &info)?;
 
-    device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, core.pipeline());
+    device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, shader.pipeline());
     device.cmd_bind_vertex_buffers(command_buffer, 0, &[model_buffer.vertex_buffer()], &[0]);
     device.cmd_bind_index_buffer(command_buffer, model_buffer.index_buffer(), 0, vk::IndexType::UINT32);
 
     device.cmd_bind_descriptor_sets(
         command_buffer,
         vk::PipelineBindPoint::GRAPHICS,
-        core.pipeline_layout(),
+        shader.pipeline_layout(),
         0,
         &[*descriptor],
         &[],
     );
     device.cmd_push_constants(
         command_buffer,
-        core.pipeline_layout(),
+        shader.pipeline_layout(),
         vk::ShaderStageFlags::VERTEX,
         0,
         push_constant_data,
@@ -175,6 +177,5 @@ unsafe fn update_secondary_command_buffer(
     device.cmd_draw_indexed(command_buffer, model_buffer.indices_len() as u32, 1, 0, 0, 0);
 
     device.end_command_buffer(command_buffer)?;
-
     Ok(command_buffer)
 }

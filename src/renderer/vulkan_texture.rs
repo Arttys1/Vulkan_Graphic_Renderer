@@ -69,10 +69,7 @@ impl VulkanTexture {
     pub fn texture_image_memory(&self) -> vk::DeviceMemory { self.texture_image_memory }
     pub fn texture_image_view(&self) -> vk::ImageView { self.texture_image_view }
     pub fn texture_sampler(&self) -> vk::Sampler { self.texture_sampler }
-
-    pub(crate) fn is_allocated(&self) -> bool {
-        self.is_allocated
-    }
+    
 }
 
 impl Drop for VulkanTexture {

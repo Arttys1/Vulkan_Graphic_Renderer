@@ -18,8 +18,6 @@ pub struct VertexBuffer {
     is_allocated: bool,
 
 //vertex buffer
-    // vertices: Vec<Vertex>,
-    // indices: Vec<u32>,
     indices_size: usize,
     vertex_buffer: vk::Buffer,
     vertex_buffer_memory: vk::DeviceMemory,
@@ -95,7 +93,6 @@ impl VertexBuffer {
 
     pub fn vertex_buffer(&self) -> vk::Buffer { self.vertex_buffer }
     pub fn index_buffer(&self) -> vk::Buffer { self.index_buffer }
-    pub fn is_allocated(&self) -> bool { self.is_allocated }
     pub fn indices_len(&self) -> usize { self.indices_size }
 }
 

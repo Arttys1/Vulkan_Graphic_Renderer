@@ -11,13 +11,12 @@ use {
     super::{
         core::*,
         commandbuffers::*, 
-        vulkan_model::VulkanModel,
     },
 };
 pub const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
 /// Our Vulkan app.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Renderer {
     _entry: Entry,
     device: Arc<Device>,
@@ -114,17 +113,10 @@ impl Renderer {
     } 
 
     pub fn add_object(&mut self, obj: &dyn Object) -> Result<()> {
-        let model = VulkanModel::from_obj(
-            self.core.device(),
-            self.core.instance(),
-            self.core.physical_device(),
-            self.core.command_pool(),
-            self.core.graphics_queue(),
-            self.core.swapchain_images(),
-            self.core.descriptor_set_layout(),
-            obj)?;
-        self.core.push_model(model);
-        Ok(())
+        unsafe {
+            self.core.add_object(obj)?;        
+            Ok(())
+        }
     }
 
     pub fn clean(&mut self) {
