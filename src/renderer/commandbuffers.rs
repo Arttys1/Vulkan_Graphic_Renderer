@@ -49,6 +49,25 @@ unsafe fn create_command_pool(
 // Command Buffers
 //================================================
 
+
+pub unsafe fn create_command_buffers(
+    device: &Device, 
+    swapchain_images: &Vec<vk::Image>, 
+    command_pools: &Vec<vk::CommandPool>) -> Result<Vec<vk::CommandBuffer>> {
+    let num_images = swapchain_images.len();
+    let mut command_buffers : Vec<vk::CommandBuffer> = Vec::with_capacity(num_images);
+    for image_index in 0..num_images {
+        let allocate_info = vk::CommandBufferAllocateInfo::builder()
+            .command_pool(command_pools[image_index])
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(1);
+
+        let command_buffer = device.allocate_command_buffers(&allocate_info)?[0];
+        command_buffers.push(command_buffer);
+    }
+    Ok(command_buffers)
+}
+
 pub unsafe fn update_command_buffer(device: &Device, core: &mut Core, 
     image_index: usize, start: &Instant) -> Result<()> 
 {
@@ -56,13 +75,7 @@ pub unsafe fn update_command_buffer(device: &Device, core: &mut Core,
     let command_pool = core.command_pools()[image_index];
     device.reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty())?;
     // Allocate
-    let allocate_info = vk::CommandBufferAllocateInfo::builder()
-        .command_pool(command_pool)
-        .level(vk::CommandBufferLevel::PRIMARY)
-        .command_buffer_count(1);
-
-    let command_buffer = device.allocate_command_buffers(&allocate_info)?[0];
-    core.command_buffers_mut()[image_index] = command_buffer;
+    let command_buffer = core.command_buffers()[image_index];
 
     //commands
     let info = vk::CommandBufferBeginInfo::builder()
@@ -94,7 +107,7 @@ pub unsafe fn update_command_buffer(device: &Device, core: &mut Core,
 
     if !core.models().is_empty() {
         let secondary_command_buffers = (0..core.models().len())
-            .map(|i| update_secondary_command_buffer(device, core, image_index, i, start))
+            .map(|i| update_secondary_command_buffer(device, core, core.command_pools()[image_index], image_index, i, start))
             .collect::<Result<Vec<_>, _>>()?;
         device.cmd_execute_commands(command_buffer, &secondary_command_buffers[..]);
     }
@@ -108,16 +121,24 @@ pub unsafe fn update_command_buffer(device: &Device, core: &mut Core,
 unsafe fn update_secondary_command_buffer(
     device : &Device,
     core: &mut Core,
+    command_pool: vk::CommandPool,
     image_index: usize,
     model_index: usize,
     start: &Instant,
 ) -> Result<vk::CommandBuffer> {
-    let allocate_info = vk::CommandBufferAllocateInfo::builder()
-        .command_pool(core.command_pools()[image_index])
-        .level(vk::CommandBufferLevel::SECONDARY)
-        .command_buffer_count(1);
+    let secondary_command_buffers = core.secondary_command_buffers_mut();
+    let secondary_command_buffers = &mut secondary_command_buffers[image_index];
+    while model_index >= secondary_command_buffers.len() {
+        let allocate_info = vk::CommandBufferAllocateInfo::builder()
+            .command_pool(command_pool)
+            .level(vk::CommandBufferLevel::SECONDARY)
+            .command_buffer_count(1);
 
-    let command_buffer = device.allocate_command_buffers(&allocate_info)?[0];
+        let command_buffer = device.allocate_command_buffers(&allocate_info)?[0];
+        secondary_command_buffers.push(command_buffer);
+    }
+
+    let command_buffer = secondary_command_buffers[model_index];
 
     //model who will be draw
     let model = core.at_model(model_index);

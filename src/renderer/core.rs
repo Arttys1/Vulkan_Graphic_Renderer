@@ -1,3 +1,5 @@
+use super::commandbuffers::create_command_buffers;
+
 use {
     vulkanalia::{
         prelude::v1_0::*,
@@ -53,6 +55,7 @@ pub struct Core {
     framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
+    secondary_command_buffers: Vec<Vec<vk::CommandBuffer>>,
     command_pools: Vec<vk::CommandPool>,
 
 //sync
@@ -115,8 +118,10 @@ impl Core {
                 swapchain_extent, render_pass, 
                 depth_image_view, color_image_view)?;
 
-            let command_buffers = vec![vk::CommandBuffer::null(); framebuffers.len()];
-            
+            let command_buffers = create_command_buffers(&device, &swapchain_images, &command_pools)?;
+        
+            let secondary_command_buffers: Vec<Vec<vk::CommandBuffer>> = vec![vec![]; swapchain_images.len()];
+
             let (in_flight_fences,
                 render_finished_semaphores,
                 image_available_semaphores,
@@ -141,6 +146,7 @@ impl Core {
                 framebuffers,
                 command_pool,
                 command_buffers,
+                secondary_command_buffers,
                 command_pools,
                 image_available_semaphores,
                 render_finished_semaphores,
@@ -261,6 +267,8 @@ impl Core {
             swapchain_extent, render_pass, 
             depth_image_view, color_image_view)?;
 
+        let command_buffers = create_command_buffers(&device, &swapchain_images, &self.command_pools)?;
+
         self.swapchain = swapchain;
         self.swapchain_format = swapchain_format;
         self.swapchain_extent = swapchain_extent;
@@ -274,7 +282,8 @@ impl Core {
         self.depth_image = depth_image;
         self.depth_image_memory = depth_image_memory;
         self.depth_image_view = depth_image_view;
-        self.command_buffers = vec![vk::CommandBuffer::null(); self.framebuffers.len()];
+        self.command_buffers = command_buffers;
+        self.secondary_command_buffers = vec![vec![]; self.swapchain_images.len()];
 
         if let Some(shaders) = self.shaders.as_ptr().as_mut() {
             shaders.reload_swapchain(self.swapchain_extent, self.msaa_samples, self.render_pass)?;
@@ -335,6 +344,10 @@ impl Core {
             self.push_model(model);
         }
         Ok(())
+    }
+
+    pub fn secondary_command_buffers_mut(&mut self) -> &mut Vec<Vec<vk::CommandBuffer>> {
+        &mut self.secondary_command_buffers
     }
 }
 
